@@ -9,10 +9,20 @@ import {
   drawMeetingLaptop,
   sampleDeskActivity,
 } from '@/lib/scene-activity-props';
-import { interpolatedSpriteFrame, spriteRise } from '@/lib/sprite-interpolation';
+import {
+  interpolatedSpriteFrame,
+  spriteRise,
+} from '@/lib/sprite-interpolation';
 import { cover } from '@/lib/chibi-renderer';
 import { DESK_OBJECTS } from '@/lib/companion-behavior';
 import { deskObjectLayout } from '@/lib/desk-object-layout';
+import {
+  drawPixelDesk,
+  drawContactShadow,
+  drawDeskClock,
+  drawDeskBooks,
+  drawDeskLaptop,
+} from '@/lib/pixel-desk';
 import { cn } from '@/lib/utils';
 
 export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
@@ -211,11 +221,18 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
           const body = () => {
             if (!pose.visible) return;
             ctx.save();
-            const inBetween = !atlasKey && !portrait && !reduced && deskActivity.frame === undefined && p.previewFrame === undefined
-              ? sampled.tweenTo : undefined;
+            const inBetween =
+              !atlasKey &&
+              !portrait &&
+              !reduced &&
+              deskActivity.frame === undefined &&
+              p.previewFrame === undefined
+                ? sampled.tweenTo
+                : undefined;
             const rise = portrait
               ? 0
-              : inBetween === undefined ? spriteRise(pose.frame)
+              : inBetween === undefined
+                ? spriteRise(pose.frame)
                 : (spriteRise(pose.frame) + spriteRise(inBetween)) / 2;
             // Enlarge around the writing contact, so the hands stay on the same desktop.
             ctx.translate(
@@ -233,23 +250,21 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
                 ? 39
                 : pose.frame;
             ctx.drawImage(
-              interpolatedSpriteFrame(frames, portrait ? 0 : shownFrame,
-                shownFrame === pose.frame ? inBetween : undefined),
-              -128, 0,
+              interpolatedSpriteFrame(
+                frames,
+                portrait ? 0 : shownFrame,
+                shownFrame === pose.frame ? inBetween : undefined,
+              ),
+              -128,
+              0,
             );
             ctx.restore();
           };
           body();
           if (roomVisible) {
-            const shade = ctx.createLinearGradient(0, 360, 0, 480);
-            shade.addColorStop(0, '#d9c8a6');
-            shade.addColorStop(1, '#c6b28e');
-            ctx.fillStyle = shade;
-            ctx.fillRect(-c.width / 2, 360, c.width, 120);
-            ctx.fillStyle = '#8f8066';
-            ctx.fillRect(-c.width / 2, 360, c.width, 3);
-            ctx.fillStyle = '#eee1c2';
-            ctx.fillRect(-c.width / 2, 363, c.width, 2);
+            drawPixelDesk(ctx, c.width);
+            if (pose.visible && !pose.travel)
+              drawContactShadow(ctx, 0, 370, 40 * characterScale);
             // Paper lies directly below the writing hand; books and the laptop stay clear of the face.
             if (r.current === 'study') {
               ctx.fillStyle = '#8c81694d';
@@ -260,9 +275,18 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
               for (let y = 367; y < 376; y += 3)
                 ctx.fillRect(-31 * characterScale, y, 59 * characterScale, 1);
             }
+            if (deskActivity.book > 0)
+              drawClassBook(
+                ctx,
+                characterScale,
+                deskActivity.page,
+                deskActivity.book,
+                preset,
+                'base',
+              );
             ctx.save();
             ctx.beginPath();
-            ctx.rect(-c.width / 2, 0, c.width, 369);
+            ctx.rect(-c.width / 2, 0, c.width, 372);
             ctx.clip();
             body();
             ctx.restore();
@@ -273,61 +297,24 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
                 deskActivity.page,
                 deskActivity.book,
                 preset,
+                'page',
               );
             if (deskActivity.laptop > 0)
               drawMeetingLaptop(ctx, characterScale, deskActivity.laptop);
             const objects = deskObjectLayout(c.width);
-            const spread = 0;
-            const rect = (
-              x: number,
-              y: number,
-              w: number,
-              h: number,
-              color: string,
-            ) => {
-              ctx.fillStyle = color;
-              ctx.fillRect(Math.round(x), y, w, h);
-            };
-            ctx.save();
-            ctx.translate(objects.study.x, objects.study.y - 379);
-            rect(-spread - 30, 367, 60, 29, '#4c5b52');
-            rect(-spread - 26, 371, 52, 19, '#cfdbc6');
-            ctx.fillStyle = '#405441';
-            ctx.font = '14px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(
-              new Date().toLocaleTimeString('zh-CN', {
-                hour: '2-digit',
-                minute: '2-digit',
-                hour12: false,
-              }),
-              -spread,
-              386,
+            const date = new Date();
+            const time =
+              String(date.getHours()).padStart(2, '0') +
+              ':' +
+              String(date.getMinutes()).padStart(2, '0');
+            drawDeskClock(ctx, objects.study.x, objects.study.y, time);
+            drawDeskBooks(ctx, objects.class.x, objects.class.y);
+            drawDeskLaptop(
+              ctx,
+              objects.meeting.x,
+              objects.meeting.y,
+              p.activeActivity === 'meeting',
             );
-            ctx.restore();
-            ctx.save();
-            ctx.translate(objects.class.x, objects.class.y - 379);
-            rect(-29, 384, 58, 7, '#536e60');
-            rect(-25, 379, 54, 6, '#b48d6c');
-            rect(-23, 380, 48, 3, '#f0dfbd');
-            rect(-18, 375, 48, 4, '#758979');
-            ctx.restore();
-            ctx.save();
-            ctx.translate(objects.meeting.x, objects.meeting.y - 377);
-            rect(spread - 29, 359, 58, 32, '#424e51');
-            rect(spread - 25, 363, 50, 23, '#c3d6ce');
-            rect(
-              spread - 22,
-              367,
-              15,
-              14,
-              p.activeActivity === 'meeting' ? '#789e89' : '#a4b7a9',
-            );
-            rect(spread - 3, 369, 21, 2, '#819d91');
-            rect(spread - 3, 375, 17, 2, '#819d91');
-            rect(spread - 34, 391, 68, 6, '#7b8986');
-            rect(spread - 23, 392, 47, 2, '#c6d0c5');
-            ctx.restore();
           }
           ctx.restore();
         };

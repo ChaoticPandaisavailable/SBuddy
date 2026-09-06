@@ -1,4 +1,5 @@
 import type { SpriteRuntime } from './sprite-animation';
+import { drawContactShadow } from './pixel-desk';
 
 // Keep the V3 photo/backup contract intact. Classroom playback uses the existing
 // pen-free, complete poses, with a separate page timeline shared by every skin.
@@ -34,7 +35,8 @@ export function drawClassBook(
   scale: number,
   page: number,
   presence: number,
-  preset: 'female' | 'male',
+  _preset: 'female' | 'male',
+  layer: 'base' | 'page' | 'all' = 'all',
 ) {
   ctx.save();
   ctx.translate(0, 369);
@@ -46,16 +48,25 @@ export function drawClassBook(
     ctx.fillStyle = color;
     ctx.fillRect(Math.round(x), Math.round(y), w, h);
   };
-  rect(-47, -8, 94, 32, '#526a59');
-  rect(-45, -10, 90, 30, '#d0bea0');
-  rect(-44, -12, 43, 30, '#fff1d2');
-  rect(1, -12, 43, 30, '#fffae6');
-  rect(-1, -12, 2, 30, '#b3a68b');
-  for (let y = -6; y < 15; y += 5) {
-    rect(-38, y, 30, 1, '#c2b99e');
-    rect(8, y, 29, 1, '#c2b99e');
+  if (layer !== 'page') {
+    drawContactShadow(ctx, 2, 24, 49);
+    rect(-47, -8, 94, 32, '#526a59');
+    rect(-44, 21, 88, 2, '#344f40');
+    rect(-45, -10, 90, 30, '#d0bea0');
+    rect(-44, -12, 43, 30, '#fff1d2');
+    rect(1, -12, 43, 30, '#fffae6');
+    rect(-1, -12, 2, 30, '#b3a68b');
+    for (let y = -6; y < 15; y += 5) {
+      rect(-38, y, 30, 1, '#c2b99e');
+      rect(8, y, 29, 1, '#c2b99e');
+    }
+    rect(-42, 18, 40, 1, '#b6a47e');
+    rect(2, 18, 40, 1, '#b6a47e');
+    rect(-40, 20, 37, 1, '#ded0a9');
+    rect(3, 20, 37, 1, '#ded0a9');
+    rect(-2, 15, 4, 12, '#b27952');
   }
-  if (page > 0 && page < 1 && presence > 0) {
+  if (layer !== 'base' && page > 0 && page < 1 && presence > 0) {
     // Pixel-stepped leaf bends over the spine; its outer corner carries the hand.
     const t = Math.round(page * 16) / 16;
     const x = Math.round(Math.cos(t * Math.PI) * 43);
@@ -73,10 +84,7 @@ export function drawClassBook(
     ctx.strokeStyle = '#baac8d';
     ctx.lineWidth = 1;
     ctx.stroke();
-    // A small gripping hand follows the page edge; the other hand stays on the book.
-    rect(x - 4, 10 - lift, 8, 5, '#b88166');
-    rect(x - 4, 9 - lift, 7, 4, preset === 'female' ? '#f0c4a3' : '#f4cfb0');
-    rect(x - 2, 8 - lift, 2, 3, '#ffe0bf');
+    // Keep the authored character hands; do not paint a disconnected extra hand.
   }
   ctx.restore();
 }
@@ -89,12 +97,20 @@ export function drawMeetingLaptop(
   ctx.save();
   ctx.translate(0, 386);
   ctx.scale(Math.min(scale, 1.4), 1);
+  drawContactShadow(ctx, 2, 7, 52);
   // We see the back of the screen: the display faces the seated character.
   const height = Math.round(57 * presence);
   ctx.fillStyle = '#4c585a';
   ctx.fillRect(-46, -height, 92, height);
   ctx.fillStyle = '#9baeb0';
   ctx.fillRect(-43, -height + 3, 86, Math.max(0, height - 6));
+  if (height > 10) {
+    ctx.fillStyle = '#c4cec0';
+    ctx.fillRect(-42, -height + 3, 84, 1);
+    ctx.fillStyle = '#7c9290';
+    ctx.fillRect(40, -height + 5, 2, height - 9);
+    ctx.fillRect(-42, -4, 84, 1);
+  }
   if (height > 25) {
     ctx.fillStyle = '#dce7df';
     ctx.fillRect(-4, -Math.round(height / 2) - 3, 8, 6);
@@ -103,5 +119,11 @@ export function drawMeetingLaptop(
   ctx.fillRect(-50, 0, 100, 5);
   ctx.fillStyle = '#c6d1cb';
   ctx.fillRect(-46, 0, 92, 2);
+  ctx.fillStyle = '#455b57';
+  ctx.fillRect(-49, 5, 98, 2);
+  ctx.fillRect(-35, -2, 14, 2);
+  ctx.fillRect(21, -2, 14, 2);
+  ctx.fillStyle = '#d8ddc8';
+  ctx.fillRect(-9, 3, 18, 1);
   ctx.restore();
 }
