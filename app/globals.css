@@ -3731,8 +3731,9 @@ progress::-webkit-progress-value {
 .candidate > [data-rig="sprite-v3"] canvas { position:absolute; width:121px; max-width:none; height:170px; top:-40px; left:50%; transform:translateX(-50%); }
 @media(min-width:761px) {
  .main-content.page-play { padding:24px; }
- .game-room { min-height:550px; height:calc(100dvh - 124px); }
- .game-room .game-layout { grid-template-columns:minmax(150px,200px) minmax(180px,1fr) minmax(150px,200px); gap:16px; margin-top:20px; }
+ .game-room { --game-tools-width:clamp(240px,24vw,320px); min-height:550px; height:calc(100dvh - 124px); }
+ .game-room .game-top > .game-status { width:var(--game-tools-width); flex:0 0 var(--game-tools-width); box-sizing:border-box; }
+ .game-room .game-layout { grid-template-columns:minmax(150px,200px) minmax(0,1fr) var(--game-tools-width); gap:16px; margin-top:20px; }
  .game-room .game-widget-list { max-height:120px; }
  .game-room.immersive { min-height:0; height:100dvh; }
 }
