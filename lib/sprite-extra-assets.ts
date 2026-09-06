@@ -68,7 +68,7 @@ export function extractExtraPoses(
       if (y > 0) add(i - cell.width);
       if (y + 1 < cell.height) add(i + cell.width);
     }
-    cleanSpriteEdges(pixels);
+    cleanSpriteEdges(pixels, preset);
     let top = cell.height,
       bottom = 0;
     for (let y = 0; y < cell.height; y++)

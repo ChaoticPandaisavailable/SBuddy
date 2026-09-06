@@ -127,7 +127,7 @@ export async function loadSpriteFrames(
                 bottom = Math.max(bottom, y);
               }
             }
-          if (!custom) cleanSpriteEdges(pixels);
+          if (!custom) cleanSpriteEdges(pixels, appearance.preset);
           ctx.putImageData(pixels, 0, 0);
           const output = document.createElement('canvas');
           output.width = 256;

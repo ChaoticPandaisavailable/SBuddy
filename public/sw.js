@@ -1,4 +1,4 @@
-const CACHE_NAME = 'study-buddies-shell-v30';
+const CACHE_NAME = 'study-buddies-shell-v31';
 const CORE_ASSETS = ['/', '/manifest.webmanifest', '/favicon.svg', '/characters/female-rig.png', '/characters/male-rig.png', '/characters/study-props.png', '/characters/female-chibi-v2.png', '/characters/male-chibi-v2.png', '/scenes/library-v2.png', '/scenes/classroom-v2.png', '/scenes/desk-v2.png', '/characters/female-sprite-v3.png', '/characters/male-sprite-v3.png', '/characters/female-inbetweens-v1.png', '/characters/male-inbetweens-v1.png'];
 
 self.addEventListener('install', (event) => {
