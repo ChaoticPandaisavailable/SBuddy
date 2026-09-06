@@ -3708,9 +3708,22 @@ progress::-webkit-progress-value {
 .scene-note-action > span { flex:1; min-width:0; overflow-wrap:anywhere; }
 .scene-note-action > button { flex-shrink:0; width:28px; height:28px; padding:5px; }
 .game-room .scene-notes-widget { max-height:calc(100dvh - 320px); overflow:auto; scrollbar-width:thin; }
+.game-sidebar-tools[hidden], .scene-notes-widget[hidden], .notes-tool [hidden] { display:none; }
+.notes-tool-compact .notes-columns { display:block; }
+.notes-tool-compact .paper-panel { padding:0; border:0; background:transparent; box-shadow:none; }
+.notes-tool-compact .button-row { gap:6px; margin:0 0 12px; }
+.notes-tool-compact .button-row > button { flex:1; white-space:nowrap; }
+.notes-tool-compact .secondary-button, .notes-tool-compact .primary-button { min-height:36px; padding:8px; font-size:12px; }
+.notes-tool-compact .text-button, .notes-tool-compact label { font-size:12px; }
+.notes-tool-compact .recorded-audio { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.notes-tool-compact audio { width:100%; min-width:0; height:36px; }
+.notes-tool-compact .inline-message { font-size:12px; line-height:1.6; margin:8px 0; }
+.notes-tool-compact .notes-result { margin-top:16px; border-top:1px solid #d9dccb; padding-top:12px; font-size:12px; overflow-wrap:anywhere; }
+.notes-tool-compact .notes-result h2, .notes-tool-compact .notes-result h3 { font-size:13px; }
+.notes-tool-compact .summary-text { font-size:12px; }
 @media(max-width:760px) {
  .game-room .scene-notes-widget { max-height:500px; }
- .game-room:not(:has(.game-sidebar-tools)) .game-sidebar-agenda { grid-column:1/-1; }
+ .game-room:not(:has(.game-sidebar-tools:not([hidden]))) .game-sidebar-agenda { grid-column:1/-1; }
 }
 .current-character > .buddy-stage > [data-rig="sprite-v3"] { height:240px; overflow:hidden; aspect-ratio:auto; }
 .current-character > .buddy-stage > [data-rig="sprite-v3"] canvas { position:absolute; width:298px; max-width:none; height:420px; top:-85px; left:50%; transform:translateX(-50%); }
