@@ -48,24 +48,21 @@ export function GameGestures({
     },
   });
   const pending = status === 'requesting' || status === 'loading';
+  const enabled = status === 'active' || pending;
   const close = () => {
-    stop();
     setOpen(false);
-    setFeedback('');
   };
 
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        stop();
         setOpen(false);
-        setFeedback('');
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, stop]);
+  }, [open]);
   return (
     <div className="game-gestures">
       <button
@@ -75,7 +72,7 @@ export function GameGestures({
         onClick={() => (open ? close() : setOpen(true))}
       >
         <Hand size={17} />
-        手势互动{status === 'active' ? ' · 开启中' : ''}
+        手势互动{status === 'active' ? ' · 已开启' : pending ? ' · 正在开启' : ''}
       </button>
       <section
         id={id}
@@ -87,7 +84,7 @@ export function GameGestures({
           <strong>用手势陪伴学习</strong>
           <button
             className="icon-button"
-            aria-label="关闭手势识别"
+            aria-label="收起手势互动面板"
             onClick={close}
           >
             <X size={18} />
@@ -103,19 +100,21 @@ export function GameGestures({
         <output>{cameraMessages[status]}</output>
         <button
           className="primary-button"
-          disabled={pending}
+          role="switch"
+          aria-label="手势识别"
+          aria-checked={enabled}
           onClick={() => {
             setFeedback('');
-            if (status === 'active') stop();
+            if (enabled) stop();
             else void start();
           }}
         >
-          {status === 'active' ? <CameraOff size={16} /> : <Camera size={16} />}
+          {enabled ? <CameraOff size={16} /> : <Camera size={16} />}
           {pending
-            ? '正在开启…'
+            ? '取消开启'
             : status === 'active'
-              ? '停止摄像头'
-              : '开启摄像头'}
+              ? '关闭手势识别'
+              : '开启手势识别'}
         </button>
         <ul>
           <li>🖐 张开手掌：打招呼、打开对话</li>
@@ -126,7 +125,7 @@ export function GameGestures({
         </ul>
         <output className="game-gesture-feedback">{feedback}</output>
         <small>
-          画面仅在本机识别，不录音。关闭面板或离开游戏即停止摄像头。
+          收起面板后继续识别。关闭手势开关或离开游戏时停止摄像头，画面仅在本机识别，不录音。
         </small>
       </section>
     </div>
