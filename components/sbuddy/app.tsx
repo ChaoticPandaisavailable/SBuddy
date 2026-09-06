@@ -32,6 +32,7 @@ import { DailyActivities } from './daily';
 import { Tools } from './tools';
 import { ScheduleTool } from './schedule-tool';
 import { GameAgenda, GameTools } from './game-panels';
+import { GameGestures } from './game-gestures';
 import {
   parseNavigation,
   type Page,
@@ -628,6 +629,16 @@ function Game({
           </div>
         </div>
         <div className="game-status">
+          <GameGestures
+            key={buddy.id}
+            buddyId={buddy.id}
+            onGreet={() => {
+              if (behavior.travel || behavior.paused) return false;
+              clickCharacter();
+              return true;
+            }}
+            onFocus={() => setPanel('focus')}
+          />
           <select
             aria-label="学习场景"
             value={data.settings.room ?? 'library'}

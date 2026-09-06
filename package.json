@@ -15,7 +15,10 @@
     "test:campus": "node scripts/verify-campus-parser.mjs",
     "lint": "oxlint",
     "format": "oxfmt",
-    "test:sbuddy": "node scripts/verify-sbuddy.mjs"
+    "test:sbuddy": "node scripts/verify-sbuddy.mjs",
+    "test:ai": "node scripts/verify-ai-providers.mjs",
+    "test:portrait": "node scripts/verify-portrait.mjs",
+    "test:gestures": "node scripts/verify-game-gestures.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",
@@ -26,6 +29,7 @@
     "cmdk": "1.1.1",
     "date-fns": "4.1.0",
     "embla-carousel-react": "8.5.2",
+    "fast-png": "8.0.0",
     "input-otp": "1.4.2",
     "lucide-react": "1.31.0",
     "react": "19.2.6",

@@ -127,3 +127,18 @@ export async function validateSpriteSemantics(
   });
   return result.valid === true;
 }
+export function portraitGenerationPrompt(
+  analysis: PersonAnalysis,
+  preset: BodyPreset,
+): string {
+  return [
+    'Create ONE complete full-body chibi pixel-art college student from the person in the reference photo. Preserve the visible face silhouette, hairstyle, glasses, clothing and accessories: ' +
+      analysis.appearance.slice(0, 1000),
+    analysis.framing === 'full-body'
+      ? 'Preserve the visible complete outfit.'
+      : 'Complete the unseen body with a neutral ' +
+        preset +
+        ' college-student outfit; preserve all visible details.',
+    '1536x2048 RGBA PNG, real transparent alpha, no matte or drawn checkerboard. Only ONE front-facing figure standing in a relaxed pose, hands resting by the sides, large head, warm dark outlines, crisp pixel edges. Show the complete head, hands and feet, centered with generous empty margins on every side. No grids, animation frames, duplicate characters, scenery, furniture, text or watermarks.',
+  ].join('\n');
+}

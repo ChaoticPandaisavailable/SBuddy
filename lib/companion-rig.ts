@@ -3,7 +3,8 @@ import type { AnimationState } from './companion-animation';
 export type BodyPreset = 'female' | 'male';
 export type RigAppearance = {
   preset: BodyPreset;
-  rigVersion?: 1 | 2 | 3;
+  // V4 is a single static portrait; V1-V3 remain animated formats.
+  rigVersion?: 1 | 2 | 3 | 4;
   spriteManifest?: import('./sprite-animation').SpriteManifest;
   atlasKey?: string;
   photoMode?: 'full-body' | 'head-only';

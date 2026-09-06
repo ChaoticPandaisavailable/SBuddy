@@ -35,7 +35,7 @@ try {
     caches: {
       keys: async () => [
         'study-buddies-shell-v10',
-        'study-buddies-shell-v20',
+        'study-buddies-shell-v21',
         'other-app',
       ],
       delete: async (key) => removedCaches.push(key),
@@ -1088,7 +1088,7 @@ try {
           throw new Error('Simulated unavailable service');
         if (
           url instanceof URL &&
-          url.pathname === '/characters/female-sprite-v3.png'
+          url.pathname === '/characters/male-sprite-v3.png'
         )
           return new Response(new Uint8Array([137, 80, 78, 71]), {
             headers: { 'content-type': 'image/png' },

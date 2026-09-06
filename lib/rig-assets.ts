@@ -1,3 +1,4 @@
+import { loadPortraitFrame } from './portrait-image';
 import type { BodyPreset, RigAppearance } from './companion-rig';
 import { readAsset } from './sbuddy-storage';
 import { validateSpriteImage } from './sprite-assets';
@@ -154,8 +155,12 @@ function extract(
 }
 export async function validateGeneratedRig(
   dataUrl: string,
-  version: 1 | 2 | 3 = 1,
+  version: 1 | 2 | 3 | 4 = 1,
 ): Promise<void> {
+  if (version === 4) {
+    await loadPortraitFrame(dataUrl);
+    return;
+  }
   if (version === 3) return validateSpriteImage(dataUrl);
   await generatedParts(dataUrl, version);
 }

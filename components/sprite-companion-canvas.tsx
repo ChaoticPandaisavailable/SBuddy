@@ -9,6 +9,7 @@ import {
   drawMeetingLaptop,
   sampleDeskActivity,
 } from '@/lib/scene-activity-props';
+import { interpolatedSpriteFrame, spriteRise } from '@/lib/sprite-interpolation';
 import { cover } from '@/lib/chibi-renderer';
 import { DESK_OBJECTS } from '@/lib/companion-behavior';
 import { deskObjectLayout } from '@/lib/desk-object-layout';
@@ -27,7 +28,8 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
     scene = props.scene !== false;
   const appearance = props.appearance ?? { preset: 'female', rigVersion: 3 };
   const preset = appearance.preset,
-    atlasKey = appearance.atlasKey;
+    atlasKey = appearance.atlasKey,
+    portrait = appearance.rigVersion === 4;
   useEffect(() => {
     input.current = props;
   }, [props]);
@@ -46,7 +48,10 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
       token = input.current.actionToken ?? 0;
     let room = input.current.room ?? 'library',
       switching = false;
-    const r = createSpriteRuntime(performance.now());
+    const r = createSpriteRuntime(
+      performance.now(),
+      !atlasKey && !portrait ? preset : undefined,
+    );
     const resize = () => {
       const b = el.getBoundingClientRect();
       c.height = 480;
@@ -79,7 +84,7 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
     };
     document.addEventListener('visibilitychange', visibility);
     Promise.all([
-      loadSpriteFrames({ preset, atlasKey, rigVersion: 3 }),
+      loadSpriteFrames({ preset, atlasKey, rigVersion: portrait ? 4 : 3 }),
       spriteImage('/scenes/library-v2.png'),
       spriteImage('/scenes/classroom-v2.png'),
     ])
@@ -114,8 +119,16 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
             window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
             document.documentElement.dataset.reduceMotion === 'true';
           const deskActivity = sampleDeskActivity(r, now, reduced);
-          const pose =
-            p.previewFrame !== undefined
+          const pose = portrait
+            ? {
+                ...sampled,
+                frame: 0,
+                x: 0,
+                flip: false,
+                visible: p.state !== 'away',
+                travel: false,
+              }
+            : p.previewFrame !== undefined
               ? {
                   ...sampled,
                   frame: Math.max(0, Math.min(47, Math.floor(p.previewFrame))),
@@ -198,7 +211,12 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
           const body = () => {
             if (!pose.visible) return;
             ctx.save();
-            const rise = pose.frame >= 39 ? 32 : pose.frame === 38 ? 16 : 0;
+            const inBetween = !atlasKey && !portrait && !reduced && deskActivity.frame === undefined && p.previewFrame === undefined
+              ? sampled.tweenTo : undefined;
+            const rise = portrait
+              ? 0
+              : inBetween === undefined ? spriteRise(pose.frame)
+                : (spriteRise(pose.frame) + spriteRise(inBetween)) / 2;
             // Enlarge around the writing contact, so the hands stay on the same desktop.
             ctx.translate(
               Math.round(pose.x * characterScale),
@@ -214,7 +232,11 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
               r.current === 'idle'
                 ? 39
                 : pose.frame;
-            ctx.drawImage(frames[shownFrame], -128, 0);
+            ctx.drawImage(
+              interpolatedSpriteFrame(frames, portrait ? 0 : shownFrame,
+                shownFrame === pose.frame ? inBetween : undefined),
+              -128, 0,
+            );
             ctx.restore();
           };
           body();
@@ -323,7 +345,7 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
       observer.disconnect();
       document.removeEventListener('visibilitychange', visibility);
     };
-  }, [preset, atlasKey, full, compact, scene]);
+  }, [preset, atlasKey, portrait, full, compact, scene]);
   return (
     <figure
       ref={host}
@@ -334,7 +356,7 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
         props.className,
       )}
       data-ready={ready}
-      data-rig="sprite-v3"
+      data-rig={portrait ? 'portrait-static' : 'sprite-v3'}
       aria-label={`像素学习搭子：${label}`}
     >
       <canvas
@@ -380,6 +402,9 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
             <span className="hotspot-caption">{o.label.split('：')[1]}</span>
           </button>
         ))}
+      {portrait && !compact && (
+        <span className="portrait-mode-label">静态外观 · 互动与专注可用</span>
+      )}
       {(!ready || error) && (
         <figcaption className="rig-loading">
           <output>{error || '正在准备人物…'}</output>

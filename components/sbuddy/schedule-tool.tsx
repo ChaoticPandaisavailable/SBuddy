@@ -32,7 +32,7 @@ export function ScheduleTool({ onCalendar }: { onCalendar: () => void }) {
     try {
       const response = await fetch('/api/ai/schedule', {
         method: 'POST',
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(70000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           material: data.material,

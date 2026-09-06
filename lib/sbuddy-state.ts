@@ -481,10 +481,20 @@ export function validateAppData(value: unknown): AppData {
         b.appearance?.rigVersion !== undefined &&
         b.appearance.rigVersion !== 1 &&
         b.appearance.rigVersion !== 2 &&
-        b.appearance.rigVersion !== 3,
+        b.appearance.rigVersion !== 3 &&
+        b.appearance.rigVersion !== 4,
     )
   )
     throw new Error('人物素材版本不受支持，原数据已保留。');
+  if (
+    data.buddies.some(
+      (b) =>
+        b.appearance?.rigVersion === 4 &&
+        (typeof b.appearance.atlasKey !== 'string' ||
+          !b.appearance.atlasKey.trim()),
+    )
+  )
+    throw new Error('静态人物素材引用缺失，原数据已保留。');
   return {
     ...data,
     campus: normalizeCampusData(data.campus),
@@ -513,11 +523,13 @@ export function validateAppData(value: unknown): AppData {
       appearance: {
         rigVersion: !b.appearance?.atlasKey
           ? 3
-          : b.appearance.rigVersion === 3
-            ? 3
-            : b.appearance.rigVersion === 2
-              ? 2
-              : 1,
+          : b.appearance.rigVersion === 4
+            ? 4
+            : b.appearance.rigVersion === 3
+              ? 3
+              : b.appearance.rigVersion === 2
+                ? 2
+                : 1,
         ...(b.appearance?.rigVersion === 3 && b.appearance.atlasKey
           ? {
               spriteManifest: validateSpriteManifest(

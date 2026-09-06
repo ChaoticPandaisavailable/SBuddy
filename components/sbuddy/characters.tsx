@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Image from 'next/image';
 import { summarizeImpression } from '@/lib/impression-summary';
 import { Check, Heart, Plus, Trash2, Upload } from 'lucide-react';
 import { useStudy } from './provider';
@@ -9,7 +10,6 @@ import { defaultAvatarStyle } from '@/lib/avatar-style';
 import { validateGeneratedRig } from '@/lib/rig-assets';
 import type { BodyPreset } from '@/lib/companion-rig';
 import { assetTransaction } from '@/lib/sbuddy-storage';
-import { validateSpriteManifest } from '@/lib/sprite-animation';
 import { PixelCompanionCanvas } from '@/components/pixel-companion-canvas';
 
 export function Characters() {
@@ -23,102 +23,122 @@ export function Characters() {
   const [bodyPreset, setBodyPreset] = useState<BodyPreset>('female');
   const change = (update: Parameters<typeof updateBuddy>[2]) =>
     setData((d) => updateBuddy(d, buddy.id, update));
+  const [preview, setPreview] = useState<{
+    buddyId: string;
+    buddyName: string;
+    preset: BodyPreset;
+    imageUrl: string;
+    file: File;
+    photoMode?: 'full-body' | 'head-only';
+  }>();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [applying, setApplying] = useState(false);
   const upload = async (file?: File) => {
     if (!file) return;
     if (!file.type.startsWith('image/') || file.size > 8 * 1024 * 1024) {
       notify('请选择 8 MB 以内的单人照片，只有人头也可以。');
       return;
     }
-    const id = buddy.id;
+    const id = buddy.id,
+      buddyName = buddy.name,
+      preset = buddy.appearance?.preset ?? 'female';
     setBusyId(id);
     try {
       const form = new FormData();
       form.set('image', file);
-      const preset = buddy.appearance?.preset ?? 'female';
       form.set('preset', preset);
-      notify(
-        '正在识别照片并生成完整人物，可能需要几分钟；原人物会保留到生成成功。',
-      );
+      form.set('mode', 'portrait');
+      notify('正在生成单个人物，完成后先预览，再决定是否应用。');
       const response = await fetch('/api/ai/avatar', {
         method: 'POST',
         body: form,
-        signal: AbortSignal.timeout(300000),
+        signal: AbortSignal.timeout(320000),
       });
-      if (!response.headers.get('content-type')?.includes('application/json')) {
-        throw new Error(
-          '无法生成：服务返回异常，请检查访问地址或稍后重试。原人物已保留。',
-        );
-      }
+      if (!response.headers.get('content-type')?.includes('application/json'))
+        throw new Error('人物服务返回异常，请稍后重试。原人物已保留。');
       const result = (await response.json()) as {
         imageUrl?: string;
         rigVersion?: number;
-        spriteManifest?: unknown;
         photoMode?: 'full-body' | 'head-only';
         error?: string;
       };
       if (
         !response.ok ||
-        !result.imageUrl ||
-        (result.rigVersion !== 1 &&
-          result.rigVersion !== 2 &&
-          result.rigVersion !== 3)
+        result.rigVersion !== 4 ||
+        !result.imageUrl?.startsWith('data:image/png;base64,')
       )
-        throw new Error(
-          result.error || '无法生成完整人物，请换一张清晰的单人照片。',
-        );
-      const rigVersion = result.rigVersion;
-      const spriteManifest =
-        rigVersion === 3
-          ? validateSpriteManifest(result.spriteManifest)
-          : undefined;
-      await validateGeneratedRig(result.imageUrl, rigVersion);
-      const atlasKey = 'rig-' + id + '-' + Date.now();
-      const photoKey = 'photo-' + id + '-' + Date.now();
+        throw new Error(result.error || '未取得可用人物图片，原人物已保留。');
+      setPreview({
+        buddyId: id,
+        buddyName,
+        preset,
+        imageUrl: result.imageUrl,
+        file,
+        photoMode: result.photoMode,
+      });
+      setPreviewOpen(true);
+      notify('人物已生成，请预览后应用。当前为静态显示。');
+    } catch (error) {
+      notify(
+        error instanceof Error &&
+          ['TimeoutError', 'AbortError'].includes(error.name)
+          ? '人物生成等待超时，原人物已保留。'
+          : error instanceof Error
+            ? error.message
+            : '人物生成失败。',
+      );
+    } finally {
+      setBusyId('');
+    }
+  };
+  const applyPreview = async () => {
+    if (!preview || applying) return;
+    if (!data.buddies.some((b) => b.id === preview.buddyId)) {
+      notify('这位搭子已被删除，仍可下载生成图片。');
+      return;
+    }
+    setApplying(true);
+    try {
+      await validateGeneratedRig(preview.imageUrl, 4);
+      const atlasKey = 'portrait-' + preview.buddyId + '-' + Date.now(),
+        photoKey = 'photo-' + preview.buddyId + '-' + Date.now();
       const originalPhoto = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () =>
           typeof reader.result === 'string'
             ? resolve(reader.result)
-            : reject(new Error('原照片格式无法读取。'));
-        reader.onerror = () =>
-          reject(new Error('原照片无法读取，未替换人物。'));
-        reader.readAsDataURL(file);
+            : reject(new Error('原照片无法读取。'));
+        reader.onerror = () => reject(new Error('原照片无法读取。'));
+        reader.readAsDataURL(preview.file);
       });
       await assetTransaction({
-        [atlasKey]: result.imageUrl,
+        [atlasKey]: preview.imageUrl,
         [photoKey]: originalPhoto,
       });
       setData((d) =>
-        updateBuddy(d, id, (b) => ({
+        updateBuddy(d, preview.buddyId, (b) => ({
           ...b,
           photoKey,
           appearance: {
-            preset,
+            preset: preview.preset,
             atlasKey,
-            rigVersion,
-            ...(spriteManifest ? { spriteManifest } : {}),
-            photoMode: result.photoMode,
+            rigVersion: 4,
+            photoMode: preview.photoMode,
           },
         })),
       );
+      setPreviewOpen(false);
       notify(
-        result.photoMode === 'head-only'
-          ? '已根据人头生成完整人物，缺少的身体部分使用所选基础人物补全。'
-          : '完整人物已生成，已应用到全部活动和连接动作。',
+        '已为「' +
+          preview.buddyName +
+          '」应用静态人物。对话、默契和专注功能继续可用。',
       );
     } catch (error) {
       notify(
-        error instanceof Error &&
-          ['TimeoutError', 'AbortError'].includes(error.name)
-          ? '生成等待超时，请稍后重试。原人物已保留。'
-          : error instanceof TypeError
-            ? '无法连接人物生成服务，请检查网络。原人物已保留。'
-            : error instanceof Error
-              ? error.message
-              : '照片处理失败，请换一张图片。',
+        error instanceof Error ? error.message : '人物保存失败，原人物已保留。',
       );
     } finally {
-      setBusyId('');
+      setApplying(false);
     }
   };
   return (
@@ -197,7 +217,7 @@ export function Characters() {
               }
             >
               <Upload size={17} />
-              {busyId === buddy.id ? '正在生成完整人物…' : '照片生成完整人物'}
+              {busyId === buddy.id ? '正在生成人物…' : '照片生成静态人物'}
               <input
                 type="file"
                 accept="image/*"
@@ -232,6 +252,14 @@ export function Characters() {
               </button>
             )}
           </div>
+          {preview?.buddyId === buddy.id && (
+            <button
+              className="text-button"
+              onClick={() => setPreviewOpen(true)}
+            >
+              查看上次生成的图片
+            </button>
+          )}
         </section>
         <aside className="impression-rail">
           <h2>对我的印象</h2>
@@ -307,6 +335,53 @@ export function Characters() {
           </form>
         </aside>
       </div>
+      {previewOpen && preview && (
+        <Dialog
+          title={'预览「' + preview.buddyName + '」的新人物'}
+          onClose={() => {
+            if (!applying) setPreviewOpen(false);
+          }}
+        >
+          <div className="portrait-preview">
+            <Image
+              width={384}
+              height={512}
+              unoptimized
+              src={preview.imageUrl}
+              alt={'为' + preview.buddyName + '生成的静态人物预览'}
+            />
+          </div>
+          <p>
+            确认外观满意后再应用。这张人物图暂时静态显示，不播放写字、挥手等动作。
+          </p>
+          <p className="muted small">
+            对话、默契、日程和专注不受影响。刷新前可以先下载图片保存。
+          </p>
+          <div className="button-row">
+            <button
+              className="primary-button"
+              disabled={applying}
+              onClick={() => void applyPreview()}
+            >
+              {applying ? '正在保存…' : '应用静态人物'}
+            </button>
+            <a
+              className="secondary-button"
+              href={preview.imageUrl}
+              download="SBuddy-人物.png"
+            >
+              下载图片
+            </a>
+            <button
+              className="text-button"
+              disabled={applying}
+              onClick={() => setPreviewOpen(false)}
+            >
+              暂不应用
+            </button>
+          </div>
+        </Dialog>
+      )}
       {creating && (
         <Dialog title="认识一位新搭子" onClose={() => setCreating(false)}>
           <form

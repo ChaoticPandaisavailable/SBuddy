@@ -1,8 +1,13 @@
-import { generatePixelAvatar, isOpenAIConfigured } from '@/lib/openai-server';
+import {
+  generatePixelAvatar,
+  isOpenAIConfigured,
+  aiServiceMessage,
+} from '@/lib/openai-server';
 import {
   analyzePerson,
   imageDataUrl,
   spriteGenerationPrompt,
+  portraitGenerationPrompt,
   validateSpriteSemantics,
 } from '@/lib/avatar-generation';
 import { SPRITE_MANIFEST } from '@/lib/sprite-animation';
@@ -61,8 +66,21 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
     const preset = form.get('preset') === 'male' ? 'male' : 'female';
+    if (form.get('mode') === 'portrait') {
+      const imageUrl = await generatePixelAvatar(
+        image,
+        portraitGenerationPrompt(analysis, preset),
+      );
+      return Response.json({
+        source: 'ai',
+        imageUrl,
+        rigVersion: 4,
+        displayMode: 'static',
+        photoMode: analysis.framing === 'full-body' ? 'full-body' : 'head-only',
+      });
+    }
     const referenceResponse = await fetch(
-      new URL('/characters/female-sprite-v3.png', request.url),
+      new URL('/characters/' + preset + '-sprite-v3.png', request.url),
       { signal: AbortSignal.timeout(10000) },
     );
     if (!referenceResponse.ok) throw new Error('Pose reference unavailable');
@@ -92,11 +110,16 @@ export async function POST(request: Request): Promise<Response> {
       spriteManifest: SPRITE_MANIFEST,
       photoMode: analysis.framing === 'full-body' ? 'full-body' : 'head-only',
     });
-  } catch {
+  } catch (error) {
     return Response.json(
       {
         error:
-          '无法生成：人物生成服务未能完成请求，请检查服务配置或稍后重试。原人物未被替换。',
+          '无法生成：' +
+          aiServiceMessage(
+            error,
+            '人物生成服务未能完成请求或未返回可用图片，请稍后重试。',
+          ) +
+          ' 原人物未被替换。',
         code: 'generation_failed',
       },
       { status: 502 },
