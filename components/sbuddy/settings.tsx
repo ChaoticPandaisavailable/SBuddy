@@ -4,6 +4,7 @@ import { Check, Download, RotateCcw, Upload } from 'lucide-react';
 import { useStudy } from './provider';
 import { Dialog, PageTitle } from './app';
 import { assetTransaction, clearAssets } from '@/lib/sbuddy-storage';
+import { validateGeneratedRig } from '@/lib/rig-assets';
 import {
   createAppData,
   localDate,
@@ -21,7 +22,8 @@ type Backup = {
   assets: Record<string, string>;
 };
 export function SettingsPage() {
-  const { data, setData, notify, recover } = useStudy();
+  const { data, setData, notify, recover, showcase, resetShowcase } =
+    useStudy();
   const [backup, setBackup] = useState<Backup>();
   const [busy, setBusy] = useState(false);
   const settings = (value: Partial<AppData['settings']>) =>
@@ -29,7 +31,11 @@ export function SettingsPage() {
   const exportData = async () => {
     setBusy(true);
     try {
-      const stored = await assetTransaction();
+      const stored = data.buddies.some(
+        (b) => b.photoKey || b.appearance?.atlasKey,
+      )
+        ? await assetTransaction()
+        : {};
       const assets: Record<string, string> = {};
       for (const b of data.buddies) {
         if (b.photoKey) {
@@ -37,12 +43,33 @@ export function SettingsPage() {
             throw new Error('有一张角色照片无法读取，请稍后重试备份。');
           assets[b.photoKey] = stored[b.photoKey];
         }
+        if (b.appearance?.atlasKey) {
+          if (!stored[b.appearance.atlasKey])
+            throw new Error('完整人物素材缺失，无法导出完整备份。');
+          assets[b.appearance.atlasKey] = stored[b.appearance.atlasKey];
+        }
       }
+      const pendingPhoto = data.legacyPhotoPending
+        ? localStorage.getItem('study-buddies-avatar')
+        : null;
+      if (data.legacyPhotoPending && !pendingPhoto)
+        throw new Error('旧照片尚未迁移且原件不可读，请先完成迁移再备份。');
+      if (pendingPhoto) assets['legacy-photo-backup'] = pendingPhoto;
       const value: Backup = {
         format: 'sbuddy-backup',
         version: 1,
         exportedAt: new Date().toISOString(),
-        data,
+        data: pendingPhoto
+          ? {
+              ...data,
+              legacyPhotoPending: false,
+              buddies: data.buddies.map((b) =>
+                b.id === 'xiaohe'
+                  ? { ...b, photoKey: 'legacy-photo-backup' }
+                  : b,
+              ),
+            }
+          : data,
         assets,
       };
       const url = URL.createObjectURL(
@@ -90,10 +117,18 @@ export function SettingsPage() {
         throw new Error('备份中的照片格式无效。');
       if (
         result.data.buddies.some(
-          (b) => b.photoKey && !result.assets[b.photoKey],
+          (b) =>
+            (b.photoKey && !result.assets[b.photoKey]) ||
+            (b.appearance?.atlasKey && !result.assets[b.appearance.atlasKey]),
         )
       )
-        throw new Error('备份缺少角色照片。');
+        throw new Error('备份缺少角色照片或完整人物素材。');
+      for (const b of result.data.buddies)
+        if (b.appearance?.atlasKey)
+          await validateGeneratedRig(
+            result.assets[b.appearance.atlasKey],
+            b.appearance.rigVersion ?? 1,
+          );
       setBackup(result);
     } catch (error) {
       notify(error instanceof Error ? error.message : '无法读取备份。');
@@ -109,13 +144,21 @@ export function SettingsPage() {
       const next = {
         ...backup.data,
         buddies: backup.data.buddies.map((b) => {
-          if (!b.photoKey) return b;
-          const key = 'restore-' + stamp + '-' + b.id;
-          assets[key] = backup.assets[b.photoKey];
-          return { ...b, photoKey: key };
+          const nextBuddy = { ...b };
+          if (b.photoKey) {
+            const key = 'restore-photo-' + stamp + '-' + b.id;
+            assets[key] = backup.assets[b.photoKey];
+            nextBuddy.photoKey = key;
+          }
+          if (b.appearance?.atlasKey) {
+            const key = 'restore-rig-' + stamp + '-' + b.id;
+            assets[key] = backup.assets[b.appearance.atlasKey];
+            nextBuddy.appearance = { ...b.appearance, atlasKey: key };
+          }
+          return nextBuddy;
         }),
       };
-      await assetTransaction(assets);
+      if (Object.keys(assets).length) await assetTransaction(assets);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       recover(next);
       setBackup(undefined);
@@ -129,6 +172,10 @@ export function SettingsPage() {
     }
   };
   const clear = async () => {
+    if (showcase) {
+      resetShowcase();
+      return;
+    }
     if (
       !confirm(
         '清空此浏览器中的 SBuddy 学习记录、照片、角色养成和旧版数据？此操作不可撤销，请先导出备份。',
@@ -158,17 +205,13 @@ export function SettingsPage() {
   };
   return (
     <>
-      <PageTitle
-        title="找到舒服的相处方式"
-        description="按你的习惯，调整这个小小的学习空间。"
-      />
+      <PageTitle title="设置" />
       <div className="settings-layout">
         <section className="settings-section">
           <h2>陪伴偏好</h2>
           <div className="setting-row">
             <div>
               <strong>搭子音效</strong>
-              <p>互动时播放轻柔的反馈音。</p>
             </div>
             <input
               aria-label="搭子音效"
@@ -194,7 +237,6 @@ export function SettingsPage() {
           <div className="setting-row">
             <div>
               <strong>默认专注时长</strong>
-              <p>每次开始时，留一段刚刚好的时间。</p>
             </div>
             <label className="inline-label">
               <input
@@ -217,11 +259,39 @@ export function SettingsPage() {
           </div>
         </section>
         <section className="settings-section">
+          <h2>人物状态</h2>
+          <div className="setting-row">
+            <label htmlFor="fatigue-hours">疲惫阈值</label>
+            <label className="inline-label">
+              <input
+                id="fatigue-hours"
+                aria-label="疲惫阈值"
+                type="number"
+                min={1}
+                max={24}
+                step={0.5}
+                value={data.settings.fatigueHours ?? 6}
+                onChange={(e) =>
+                  settings({
+                    fatigueHours: Math.max(
+                      1,
+                      Math.min(24, Number(e.target.value) || 6),
+                    ),
+                  })
+                }
+              />
+              小时
+            </label>
+          </div>
+          <p className="muted">
+            当天安排达到这个时长，空闲时会撑头休息。重叠时间只算一次。
+          </p>
+        </section>
+        <section className="settings-section">
           <h2>校园日历</h2>
           <div className="setting-row">
             <div>
               <strong>当前学期</strong>
-              <p>用于整理课程和导入数据。</p>
             </div>
             <input
               aria-label="当前学期"
@@ -341,19 +411,23 @@ export function SettingsPage() {
           </div>
           <div className="setting-row">
             <div>
-              <strong>清空本地数据</strong>
-              <p>清除全部记录，恢复三位初始搭子。</p>
+              <strong>{showcase ? '重新开始展示' : '清空本地数据'}</strong>
+              <p>
+                {showcase
+                  ? '恢复展示样例，个人空间与照片保持不变。'
+                  : '清除全部记录，恢复小禾和知序两位初始搭子。'}
+              </p>
             </div>
             <button className="text-button danger" onClick={() => void clear()}>
               <RotateCcw size={17} />
-              清空数据
+              {showcase ? '重新演示' : '清空数据'}
             </button>
           </div>
         </section>
         <section className="settings-about">
           <strong>SBuddy</strong>
           <p>完蛋！我被学习搭子包围了</p>
-          <span>本地陪伴版 · 学习是你的，陪伴是我们的。</span>
+
           <p className="small">
             AI
             服务为可选项。照片、截图与录音只在主动使用对应功能时提交到所配置的服务；摄像头手势在本机处理。关闭页面后不发送定时提醒。

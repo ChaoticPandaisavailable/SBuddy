@@ -1,5 +1,11 @@
 'use client';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   ArrowRight,
   BookOpen,
@@ -11,12 +17,10 @@ import {
   Images,
   Maximize,
   Menu,
-  MessageCircle,
   Minimize,
   Pause,
   Play,
   Settings,
-  Sparkles,
   Users,
   Wrench,
   X,
@@ -26,9 +30,18 @@ import { PixelCompanionCanvas } from '@/components/pixel-companion-canvas';
 import { Characters } from './characters';
 import { DailyActivities } from './daily';
 import { Tools } from './tools';
+import { ScheduleTool } from './schedule-tool';
+import { GameAgenda, GameTools } from './game-panels';
+import {
+  parseNavigation,
+  type Page,
+  type Tool,
+  type Subpage,
+} from '@/lib/app-navigation';
 import { SettingsPage } from './settings';
 import { campusScheduleEvents } from '@/lib/campus-data';
-import { formatEventLine, getScheduleSnapshot } from '@/lib/schedule-engine';
+import { eventsForDays } from '@/lib/calendar-layout';
+import { getScheduleSnapshot } from '@/lib/schedule-engine';
 import {
   modeToAnimation,
   type AnimationState,
@@ -47,16 +60,11 @@ import {
   type Buddy,
 } from '@/lib/sbuddy-state';
 import { playCompanionSound } from '@/lib/companion-sound';
+import { needsGreeting } from '@/lib/companion-behavior';
+import { useCompanionBehavior } from './use-companion-behavior';
+import { SHOWCASE_URL } from '@/lib/showcase';
 
-export type Page =
-  | 'home'
-  | 'play'
-  | 'characters'
-  | 'daily'
-  | 'tools'
-  | 'gallery'
-  | 'settings';
-export type Tool = 'schedule' | 'notes' | 'gesture' | 'focus' | undefined;
+export type { Page, Tool } from '@/lib/app-navigation';
 const navigation = [
   { id: 'home', label: '主页', icon: Home },
   { id: 'play', label: '开始游戏', icon: Play },
@@ -74,22 +82,26 @@ export function SBuddyApp() {
   );
 }
 function AppShell() {
-  const { data, notice, notify, ready } = useStudy();
+  const {
+    data,
+    notice,
+    notify,
+    ready,
+    recoveryVersion,
+    showcase,
+    resetShowcase,
+  } = useStudy();
   const [page, setPage] = useState<Page>('home');
-  const [tool, setTool] = useState<Tool>();
+  const [tool, setTool] = useState<Subpage>();
   const [drawer, setDrawer] = useState(false);
   const buddy = data.buddies.find((b) => b.id === data.activeBuddyId)!;
   useEffect(() => {
     const sync = () => {
-      const [next, sub] = location.hash.slice(1).split('/');
-      if (navigation.some((n) => n.id === next)) {
-        setPage(next as Page);
-        setTool(
-          ['schedule', 'notes', 'gesture', 'focus'].includes(sub)
-            ? (sub as Tool)
-            : undefined,
-        );
-      }
+      const next = parseNavigation(location.hash);
+      setPage(next.page);
+      setTool(next.sub);
+      if (location.hash === '#tools/schedule')
+        window.history.replaceState(null, '', '#daily/schedule');
     };
     sync();
     window.addEventListener('hashchange', sync);
@@ -99,11 +111,12 @@ function AppShell() {
       window.removeEventListener('popstate', sync);
     };
   }, []);
-  const navigate = (next: Page, sub?: Tool) => {
+  const navigate = (next: Page, sub?: Subpage) => {
     setPage(next);
     setTool(sub);
     setDrawer(false);
     window.history.pushState(null, '', '#' + next + (sub ? '/' + sub : ''));
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
   const menuRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -127,7 +140,7 @@ function AppShell() {
     </>
   );
   return (
-    <div className="sbuddy-app">
+    <div className={'sbuddy-app' + (showcase ? ' showcase-app' : '')}>
       <a className="skip-link" href="#main-content">
         跳到主要内容
       </a>
@@ -143,34 +156,53 @@ function AppShell() {
           <span className="brand-symbol">
             <BookOpen size={23} />
           </span>
-          <span>
-            SBuddy
-            <span className="brand-caption">完蛋！我被学习搭子包围了</span>
-          </span>
+          <span>SBuddy</span>
         </button>
-        <div className="header-note">把学习的日常，过成我们的故事。</div>
+        {showcase && (
+          <div className="showcase-controls">
+            <span>展示空间</span>
+            <button
+              onClick={() => {
+                resetShowcase();
+                navigate('play');
+              }}
+            >
+              重置演示
+            </button>
+            <button onClick={() => window.location.assign('/#home')}>
+              退出
+            </button>
+          </div>
+        )}
         <button
           className="current-buddy"
           onClick={() => navigate('characters')}
         >
           <span className="online-dot" />
-          {buddy.name}
+          {page === 'home' ? '选择搭子' : buddy.name}
           <ChevronRight size={15} />
         </button>
       </header>
       <aside className="desktop-nav">
         <nav aria-label="主导航">{nav}</nav>
-        <div className="sidebar-bottom">
-          <span className="small-leaf">
-            <BookOpen size={22} />
-          </span>
-          <p>
-            一起开始，
-            <br />
-            就已经很棒了。
-          </p>
-          <span>YOUR STUDY COMPANION</span>
-        </div>
+        {showcase && (
+          <div className="showcase-route">
+            <span>三分钟，认识 SBuddy</span>
+            <button onClick={() => navigate('play')}>
+              01 <span>遇见学习搭子</span>
+            </button>
+            <button onClick={() => navigate('daily', 'schedule')}>
+              02 <span>把安排变成日程</span>
+            </button>
+            <button onClick={() => navigate('tools', 'notes')}>
+              03 <span>从纪要到待办</span>
+            </button>
+            <p>专注 1 分钟，体验成长奖励。</p>
+            <a href="/animation-preview" target="_blank" rel="noreferrer">
+              动作展示 ↗
+            </a>
+          </div>
+        )}
       </aside>
       <dialog
         ref={menuRef}
@@ -191,26 +223,45 @@ function AppShell() {
         className={'main-content page-' + page}
         tabIndex={-1}
       >
-        {!ready && (
+        {!ready && page !== 'home' && (
           <div className="inline-message">
             正在读取本地数据；如读取失败，请前往设置恢复备份。
           </div>
         )}
-        {data.demo && (
+        {data.demo && !showcase && page !== 'home' && (
           <div className="demo-banner">当前包含演示数据，可在设置中清空。</div>
         )}
-        {page === 'home' && <Landing buddy={buddy} navigate={navigate} />}
-        {page === 'play' && <Game buddy={buddy} navigate={navigate} />}
-        {page === 'characters' && <Characters />}
-        {page === 'daily' && (
-          <DailyActivities onImport={() => navigate('tools', 'schedule')} />
+        {page === 'home' && <Landing navigate={navigate} />}
+        {page === 'play' && (
+          <Game
+            key={buddy.id + recoveryVersion}
+            buddy={buddy}
+            navigate={navigate}
+          />
         )}
-        <div hidden={page !== 'tools'}>
+        {page === 'characters' && <Characters />}
+        <div hidden={page !== 'daily'} key={'daily-' + recoveryVersion}>
+          <div hidden={tool === 'schedule'}>
+            <DailyActivities
+              onImport={() => navigate('daily', 'schedule')}
+              onFocus={() => navigate('tools', 'focus')}
+            />
+          </div>
+          <div hidden={tool !== 'schedule'}>
+            <button
+              className="text-button back-button"
+              onClick={() => navigate('daily')}
+            >
+              返回日常活动
+            </button>
+            <ScheduleTool onCalendar={() => navigate('daily')} />
+          </div>
+        </div>
+        <div hidden={page !== 'tools'} key={'tools-' + recoveryVersion}>
           <Tools
             active={page === 'tools'}
-            tool={tool}
+            tool={tool === 'schedule' ? undefined : tool}
             onSelect={(next) => navigate('tools', next)}
-            onCalendar={() => navigate('daily')}
           />
         </div>
         {page === 'gallery' && <Gallery buddy={buddy} />}
@@ -228,31 +279,16 @@ function AppShell() {
   );
 }
 function Landing({
-  buddy,
   navigate,
 }: {
-  buddy: Buddy;
   navigate: (page: Page, tool?: Tool) => void;
 }) {
-  const { data } = useStudy();
-  const today = getScheduleSnapshot(
-    [...data.events, ...campusScheduleEvents(data.campus)],
-    new Date(),
-  );
+  const { showcase } = useStudy();
   return (
     <div className="landing">
-      <div className="landing-top">
-        <span>欢迎来到你的小小学习宇宙</span>
-        <span>
-          {new Date().toLocaleDateString('zh-CN', {
-            month: 'long',
-            day: 'numeric',
-            weekday: 'long',
-          })}
-        </span>
-      </div>
       <section className="landing-hero">
         <div className="hero-copy">
+          <span className="hero-eyebrow">SBUDDY · 学习，也可以有陪伴</span>
           <h1>
             完蛋！
             <br />
@@ -261,80 +297,65 @@ function Landing({
             <em>包围了。</em>
           </h1>
           <p>
-            课很多，计划很满，偶尔也不想开始。
+            从第一句问候，到每一次完成。
             <br />
-            没关系，找个搭子，陪你迈出今天的第一小步。
+            让计划、专注和陪伴，发生在同一张桌上。
           </p>
-          <button className="primary-button" onClick={() => navigate('play')}>
-            和 {buddy.name} 开始今天
-            <ArrowRight size={18} />
-          </button>
-          <button
-            className="text-button"
-            onClick={() => navigate('characters')}
-          >
-            先认识一下我的搭子们
-            <ChevronRight size={16} />
-          </button>
-        </div>
-        <div className="hero-scene">
-          <span className="scene-label">
-            <span className="online-dot" />
-            {buddy.name} 正在等你
-          </span>
-          <PixelCompanionCanvas
-            state="greet"
-            avatarStyle={buddy.style}
-            className="hero-character"
-          />
-          <div className="character-caption">
-            <span>「不用一下子做到最好。</span>
-            <br />
-            <strong>我们先一起开始，好吗？」</strong>
+          <div className="button-row">
+            <a className="primary-button" href={SHOWCASE_URL}>
+              体验展示
+              <ArrowRight size={18} />
+            </a>
+            <button
+              className="secondary-button"
+              onClick={() =>
+                showcase ? window.location.assign('/#play') : navigate('play')
+              }
+            >
+              进入我的空间
+            </button>
           </div>
-          <span className="scene-footer">课间、图书馆、每一个想努力的瞬间</span>
+        </div>
+        <div
+          className="hero-scene showcase-hero-scene"
+          aria-label="像素图书馆里的学习搭子"
+        >
+          <PixelCompanionCanvas
+            state="study"
+            appearance={{ preset: 'female' }}
+            fullRoom
+            scene
+          />
+          <div className="hero-scene-caption">
+            <span className="online-dot" /> 你的座位，一直留着。
+          </div>
         </div>
       </section>
-      <section className="home-bottom">
-        <div>
-          <BookOpen size={24} />
+      <section className="showcase-features" aria-label="项目亮点">
+        <button onClick={() => navigate('characters')}>
+          <Heart />
           <div>
-            <h2>今天，从一件小事开始</h2>
-            <p>
-              {today.todayEvents.length
-                ? formatEventLine(
-                    today.currentEvent ??
-                      today.nextEvent ??
-                      today.todayEvents[0],
-                  )
-                : '还没有安排。把第一件小事放进日历吧。'}
-            </p>
+            <h2>陪伴，有回应</h2>
+            <p>两位搭子，独立记忆与成长。</p>
           </div>
-          <button
-            className="icon-button"
-            aria-label="查看日常活动"
-            onClick={() => navigate('daily')}
-          >
-            <ArrowRight />
-          </button>
-        </div>
-        <div>
-          <Heart size={24} />
+          <ArrowRight size={18} />
+        </button>
+        <button onClick={() => navigate('daily')}>
+          <CalendarDays />
           <div>
-            <h2>相处，会被好好记住</h2>
-            <p>
-              {buddy.name} · {buddy.relationship.bondLevel} · 默契{' '}
-              {buddy.relationship.bond}/100
-            </p>
+            <h2>计划，能行动</h2>
+            <p>日程、待办与桌面活动相连。</p>
           </div>
-          <button
-            className="icon-button"
-            aria-label="查看成长鉴赏"
-            onClick={() => navigate('gallery')}
-          >
-            <ArrowRight />
-          </button>
-        </div>
+          <ArrowRight size={18} />
+        </button>
+        <button onClick={() => navigate('tools')}>
+          <BookOpen />
+          <div>
+            <h2>学习，有条理</h2>
+            <p>课件、纪要和专注放在一起。</p>
+          </div>
+          <ArrowRight size={18} />
+        </button>
       </section>
     </div>
   );
@@ -361,21 +382,28 @@ export function PageTitle({
 export function BuddyStage({
   buddy,
   animation = 'idle',
+  scene = true,
   children,
 }: {
   buddy: Buddy;
   animation?: AnimationState;
+  scene?: boolean;
   children?: ReactNode;
 }) {
   return (
     <div className="buddy-stage">
-      <PixelCompanionCanvas state={animation} avatarStyle={buddy.style} />
+      <PixelCompanionCanvas
+        state={animation}
+        avatarStyle={buddy.style}
+        appearance={buddy.appearance}
+        scene={scene}
+      />
       <div className="stage-ground" />
       {children}
     </div>
   );
 }
-export function FocusControls() {
+export function FocusControls({ minutes }: { minutes?: number } = {}) {
   const { data, startFocus, toggleFocus, finishFocus } = useStudy();
   const [, tick] = useState(0);
   useEffect(() => {
@@ -383,9 +411,10 @@ export function FocusControls() {
     return () => clearInterval(id);
   }, []);
   const focus = data.focus;
-  const seconds = focus
-    ? remainingSeconds(focus)
-    : data.settings.focusMinutes * 60;
+  const seconds =
+    focus && focus.status !== 'complete'
+      ? remainingSeconds(focus)
+      : (minutes ?? data.settings.focusMinutes) * 60;
   return (
     <div className="mini-focus">
       <span className="timer-digits">
@@ -395,7 +424,7 @@ export function FocusControls() {
         :{(seconds % 60).toString().padStart(2, '0')}
       </span>
       {!focus || focus.status === 'complete' ? (
-        <button className="primary-button" onClick={() => startFocus()}>
+        <button className="primary-button" onClick={() => startFocus(minutes)}>
           <Play size={16} />
           开始专注
         </button>
@@ -425,14 +454,15 @@ function Game({
   buddy: Buddy;
   navigate: (page: Page, tool?: Tool) => void;
 }) {
-  const { data, setData, notify } = useStudy();
+  const { data, setData, notify, showcase } = useStudy();
   const [immersive, setImmersive] = useState(false);
+  const [panel, setPanel] = useState<'focus' | 'notes'>();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 15000);
+    const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
-  const [manual, setManual] = useState<AnimationState>();
+  const [opening, setOpening] = useState(false);
   const [conversation, setConversation] = useState<{
     buddyId: string;
     prompt: DialoguePrompt;
@@ -444,18 +474,25 @@ function Game({
     currentId.current = buddy.id;
   }, [buddy.id]);
   const schedule = getScheduleSnapshot(
-    [...data.events, ...campusScheduleEvents(data.campus)],
+    [
+      ...eventsForDays(data.events, [now]),
+      ...campusScheduleEvents(data.campus),
+    ],
     now,
   );
   const active = conversation?.buddyId === buddy.id ? conversation : undefined;
-  const animation = active?.response
-    ? 'cheer'
-    : active
-      ? active.prompt.animation
-      : (manual ??
-        (data.focus?.status === 'running'
-          ? 'study'
-          : modeToAnimation(schedule.mode)));
+  const behavior = useCompanionBehavior(
+    buddy,
+    schedule.todayEvents,
+    modeToAnimation(schedule.mode),
+    now,
+    !!active && !active.response,
+  );
+  const closeDialogue = () => {
+    behavior.touch();
+    setOpening(false);
+    setConversation(undefined);
+  };
   useEffect(() => {
     const exit = () => {
       if (!document.fullscreenElement) setImmersive(false);
@@ -489,7 +526,9 @@ function Game({
     }
     setImmersive(false);
   };
-  const talk = () => {
+  const talk = useCallback(() => {
+    behavior.touch();
+    setOpening(false);
     const prompt =
       selectPrompt(buddy.relationship, 'demo', new Date(), false) ??
       dialoguePrompts.find(
@@ -499,9 +538,14 @@ function Game({
             ['初识', '熟悉', '默契', '知心'].indexOf(
               buddy.relationship.bondLevel,
             ) >= ['初识', '熟悉', '默契', '知心'].indexOf(p.minimumLevel)),
+      ) ??
+      dialoguePrompts.find(
+        (p) =>
+          p.id !== buddy.relationship.dialogueHistory.at(-1)?.promptId &&
+          !p.minimumLevel,
       );
     if (!prompt) {
-      notify('今天的话题都聊过啦。一起专注，还能积累新的默契。');
+      notify('我在这里，稍后再聊聊。');
       return;
     }
     setData((d) =>
@@ -511,158 +555,231 @@ function Game({
       })),
     );
     setConversation({ buddyId: buddy.id, prompt });
-  };
+  }, [behavior, buddy, notify, setData]);
+  const clickCharacter = useCallback(() => {
+    if (behavior.travel || behavior.paused) return;
+    const greet = needsGreeting(
+      behavior.behavior.lastInteractionAt,
+      Date.now(),
+    );
+    behavior.touch();
+    if (active || opening) return;
+    if (greet) {
+      setOpening(true);
+      behavior.greet();
+    } else talk();
+  }, [behavior, active, opening, talk]);
   return (
     <section
       ref={container}
       className={'game-room ' + (immersive ? 'immersive' : '')}
     >
+      <PixelCompanionCanvas
+        key={buddy.id}
+        state={behavior.animation}
+        actionToken={behavior.actionToken}
+        activeActivity={behavior.activity}
+        onActivityClick={(activity) => {
+          if (behavior.travel) return;
+          const targetPanel = activity === 'study' ? 'focus' : 'notes';
+          if (
+            behavior.behavior.mode === 'manual' &&
+            behavior.behavior.activity === activity &&
+            panel !== targetPanel
+          ) {
+            setPanel(targetPanel);
+            return;
+          }
+          const completing =
+            !behavior.paused &&
+            behavior.behavior.mode === 'manual' &&
+            behavior.behavior.activity === activity;
+          behavior.selectActivity(activity);
+          const keepFocus =
+            activity === 'study' &&
+            !!data.focus &&
+            data.focus.status !== 'complete';
+          setPanel(completing && !keepFocus ? undefined : targetPanel);
+        }}
+        onCharacterClick={clickCharacter}
+        onTravelChange={behavior.setTravel}
+        onActionComplete={behavior.finishShort}
+        appearance={buddy.appearance}
+        fullRoom
+        room={data.settings.room ?? 'library'}
+      />
       <div className="game-top">
-        <div>
-          <span className="soft-label">与 {buddy.name} 的默契</span>
-          <div className="bond-value">
-            <Heart size={20} />
-            {buddy.relationship.bond}
-            <small>/ 100 · {buddy.relationship.bondLevel}</small>
+        <div className="game-command">
+          <fieldset className="instruction-switch" aria-label="人物指令">
+            <button
+              aria-pressed={behavior.behavior.mode === 'schedule'}
+              disabled={behavior.travel || behavior.paused}
+              onClick={() => {
+                behavior.selectMode('schedule');
+                setPanel(undefined);
+              }}
+            >
+              按日程活动
+            </button>
+            <button
+              aria-pressed={behavior.behavior.mode === 'manual'}
+              disabled={behavior.travel || behavior.paused}
+              onClick={() => {
+                behavior.selectMode('manual');
+                setPanel(undefined);
+              }}
+            >
+              等你出发
+            </button>
+          </fieldset>
+          <div
+            className="bond-heart"
+            aria-label={`默契值 ${buddy.relationship.bond}`}
+            title={`默契值 ${buddy.relationship.bond}`}
+          >
+            <Heart aria-hidden="true" />
+            <span
+              style={{
+                fontSize: `${Math.max(10, 24 - Math.max(0, String(buddy.relationship.bond).length - 2) * 2)}px`,
+              }}
+            >
+              {buddy.relationship.bond}
+            </span>
           </div>
-          <progress
-            value={buddy.relationship.bond}
-            max={100}
-            aria-label="默契值"
-          />
         </div>
         <div className="game-status">
-          <span className="online-dot" />
-          {schedule.currentEvent?.title ?? '现在，是我们的时间'}
-          <small>
-            {schedule.currentEvent
-              ? formatEventLine(schedule.currentEvent)
-              : '慢慢来，今天也有我陪你。'}
-          </small>
+          <select
+            aria-label="学习场景"
+            value={data.settings.room ?? 'library'}
+            onChange={(e) => {
+              const room =
+                e.target.value === 'classroom' ? 'classroom' : 'library';
+              behavior.setTravel(true);
+              setData((d) => ({ ...d, settings: { ...d.settings, room } }));
+            }}
+          >
+            <option value="library">图书馆</option>
+            <option value="classroom">教室</option>
+          </select>
+          <button
+            className="immersion-toggle"
+            onClick={() => void (immersive ? leave() : enter())}
+          >
+            {immersive ? <Minimize size={17} /> : <Maximize size={17} />}
+            {immersive ? '退出纯享' : '纯享模式'}
+          </button>
         </div>
       </div>
-      <BuddyStage buddy={buddy} animation={animation}>
-        <span className="stage-name">
-          {buddy.name}
-          <small>{buddy.personality}</small>
-        </span>
-      </BuddyStage>
+      <div className="game-layout">
+        <GameAgenda events={schedule.todayEvents} navigate={navigate} />
+        <div className="game-center" aria-hidden="true" />
+        <GameTools panel={panel} onClose={() => setPanel(undefined)} />
+      </div>
       <div className="game-interaction">
-        {active ? (
-          <div className="dialogue-box">
-            <strong>{buddy.name}</strong>
-            <p>{active.response ?? active.prompt.text}</p>
-            {active.response ? (
+        <div className="dialogue-box" aria-label="搭子对话">
+          <div className="dialogue-heading">
+            {(active || opening) && (
               <button
-                className="primary-button"
-                onClick={() => setConversation(undefined)}
+                className="icon-button"
+                aria-label="收起对话"
+                onClick={closeDialogue}
               >
-                记住啦
-                <Check size={16} />
+                <X size={16} />
               </button>
-            ) : (
-              <div className="dialogue-choices">
-                {active.prompt.choices.map((choice) => (
-                  <button
-                    className="secondary-button"
-                    key={choice.id}
-                    onClick={() => {
-                      const id = buddy.id;
-                      setData((d) =>
-                        updateBuddy(d, id, (b) =>
-                          b.relationship.answeredPromptIds.includes(
-                            active.prompt.id,
-                          )
-                            ? b
-                            : {
-                                ...b,
-                                relationship: applyDialogueChoice(
-                                  b.relationship,
-                                  active.prompt,
-                                  choice,
-                                  new Date(),
-                                ).state,
-                              },
-                        ),
-                      );
-                      setConversation({ ...active, response: choice.reaction });
-                      playCompanionSound('select', data.settings.muted);
-                      void fetch('/api/ai/dialogue', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          text: choice.reaction,
-                          context: active.prompt.id,
-                          buddyName: buddy.name,
-                          personality: buddy.personality,
-                        }),
-                      })
-                        .then((r) => r.json() as Promise<{ text?: string }>)
-                        .then((result) => {
-                          if (
-                            currentId.current === id &&
-                            typeof result.text === 'string'
-                          )
-                            setConversation((c) =>
-                              c?.buddyId === id &&
-                              c.prompt.id === active.prompt.id
-                                ? { ...c, response: result.text }
-                                : c,
-                            );
-                        })
-                        .catch(() => undefined);
-                    }}
-                  >
-                    {choice.label}
-                  </button>
-                ))}
-              </div>
             )}
           </div>
-        ) : (
-          <>
-            <div className="game-quote">
-              “
-              {buddy.personality === '理性规划'
-                ? '把任务拆小，我们先完成第一项。'
-                : buddy.personality === '活力陪伴'
-                  ? '准备好了吗？一起出发，今天也会很棒！'
-                  : '不着急。你愿意开始的这一刻，就已经很棒了。'}
-              ”
-            </div>
-            <div className="button-row centered">
-              <button className="primary-button" onClick={talk}>
-                <MessageCircle size={18} />和 {buddy.name} 聊聊
-              </button>
-              <button
-                className="secondary-button"
-                onClick={() =>
-                  setManual(manual === 'greet' ? undefined : 'greet')
-                }
-              >
-                <Sparkles size={18} />
-                打个招呼
-              </button>
-              <button
-                className="text-button"
-                onClick={() => navigate('tools', 'focus')}
-              >
-                一起专注
-                <ArrowRight size={17} />
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-      <div className="game-footer">
-        <span>一点一滴，都是我们的默契。</span>
-        <button
-          className="text-button"
-          onClick={() => void (immersive ? leave() : enter())}
-        >
-          {immersive ? <Minimize size={18} /> : <Maximize size={18} />}
-          {immersive ? '退出纯享 · Esc' : '纯享模式'}
-        </button>
+          {opening ? (
+            <>
+              <p aria-live="polite">Hello，想聊聊吗？</p>
+              <div className="dialogue-choices">
+                <button className="secondary-button" onClick={talk}>
+                  聊聊
+                </button>
+                <button className="secondary-button" onClick={closeDialogue}>
+                  先忙
+                </button>
+              </div>
+            </>
+          ) : active ? (
+            <>
+              <p aria-live="polite">{active.response ?? active.prompt.text}</p>
+              {active.response ? (
+                <button className="primary-button" onClick={closeDialogue}>
+                  继续
+                  <Check size={16} />
+                </button>
+              ) : (
+                <div className="dialogue-choices">
+                  {active.prompt.choices.map((choice) => (
+                    <button
+                      className="secondary-button"
+                      key={choice.id}
+                      onClick={() => {
+                        behavior.touch();
+                        const id = buddy.id;
+                        setData((d) =>
+                          updateBuddy(d, id, (b) =>
+                            b.relationship.answeredPromptIds.includes(
+                              active.prompt.id,
+                            )
+                              ? b
+                              : {
+                                  ...b,
+                                  relationship: applyDialogueChoice(
+                                    b.relationship,
+                                    active.prompt,
+                                    choice,
+                                    new Date(),
+                                  ).state,
+                                },
+                          ),
+                        );
+                        setConversation({
+                          ...active,
+                          response: choice.reaction,
+                        });
+                        playCompanionSound('select', data.settings.muted);
+                        if (!showcase)
+                          void fetch('/api/ai/dialogue', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              text: choice.reaction,
+                              context: active.prompt.id,
+                              buddyName: buddy.name,
+                              personality: buddy.personality,
+                            }),
+                          })
+                            .then((r) => r.json() as Promise<{ text?: string }>)
+                            .then((result) => {
+                              if (
+                                currentId.current === id &&
+                                typeof result.text === 'string'
+                              )
+                                setConversation((c) =>
+                                  c?.buddyId === id &&
+                                  c.prompt.id === active.prompt.id
+                                    ? { ...c, response: result.text }
+                                    : c,
+                                );
+                            })
+                            .catch(() => undefined);
+                      }}
+                    >
+                      {choice.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="dialogue-idle">
+                {behavior.paused ? '休息一下，继续计时后我就回来。' : '我在。'}
+              </p>
+            </>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -671,10 +788,7 @@ function Gallery({ buddy }: { buddy: Buddy }) {
   const [selected, setSelected] = useState<number>();
   return (
     <>
-      <PageTitle
-        title="属于我们的收藏"
-        description={'和 ' + buddy.name + ' 一起走过的每一步，都值得被记住。'}
-      >
+      <PageTitle title="鉴赏">
         <span className="pill">
           {
             rewards.filter((r) => buddy.relationship.unlocked.includes(r.id))
@@ -697,6 +811,7 @@ function Gallery({ buddy }: { buddy: Buddy }) {
                   <PixelCompanionCanvas
                     state={reward.animation}
                     avatarStyle={buddy.style}
+                    appearance={buddy.appearance}
                     compact
                   />
                 ) : (
@@ -746,17 +861,24 @@ export function Dialog({
   title,
   onClose,
   children,
+  className = '',
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
   }, []);
   return (
-    <dialog className="app-dialog" ref={ref} onCancel={onClose}>
+    <dialog
+      className={'app-dialog ' + className}
+      aria-label={title}
+      ref={ref}
+      onCancel={onClose}
+    >
       <div className="dialog-heading">
         <h2>{title}</h2>
         <button

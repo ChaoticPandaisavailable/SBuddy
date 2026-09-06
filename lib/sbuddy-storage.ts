@@ -1,4 +1,19 @@
 const DATABASE = 'sbuddy-assets';
+export async function readAsset(key: string): Promise<string | undefined> {
+  const db = await database();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('assets', 'readonly');
+    const request = tx.objectStore('assets').get(key);
+    tx.oncomplete = () => {
+      db.close();
+      resolve(typeof request.result === 'string' ? request.result : undefined);
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(new Error('人物素材无法读取。'));
+    };
+  });
+}
 function database(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE, 1);

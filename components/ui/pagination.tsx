@@ -132,4 +132,3 @@ export {
   PaginationNext,
   PaginationPrevious,
 };
-

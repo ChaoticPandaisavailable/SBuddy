@@ -19,4 +19,3 @@ function Label({ className, ...props }: React.ComponentProps<'label'>) {
 }
 
 export { Label };
-

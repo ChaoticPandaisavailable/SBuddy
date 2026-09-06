@@ -8,7 +8,22 @@ export type ScheduleEvent = {
   title: string;
   kind: EventKind;
   location?: string;
+  repeat?: EventRepeat;
+  remindMinutes?: number | null;
+  excludedDates?: string[];
+  originCourseId?: string;
   source?: 'material' | 'campus-course' | 'campus-exam' | 'campus-todo';
+};
+export type EventRepeat = {
+  kind: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly' | 'custom';
+  frequency?: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  interval?: number;
+  weekdays?: number[];
+  monthDays?: number[];
+  months?: number[];
+  ordinal?: number;
+  dayKind?: number | 'natural' | 'workday' | 'weekend';
+  until?: string;
 };
 export const initialEvents: ScheduleEvent[] = [];
 export function dateString(date: Date): string {
@@ -107,7 +122,10 @@ export function parseScheduleMaterial(
         ?.trim();
       const title =
         line
-          .replace(/(?:\d{4}[-/年])?\d{1,2}[-/月]\d{1,2}日?/g, '')
+          .replace(
+            /(?<![\d:：])(?:\d{4}[-/年])?\d{1,2}[-/月]\d{1,2}日?(?![\d:：])/g,
+            '',
+          )
           .replace(/\d{1,2}[日号]/g, '')
           .replace(
             /今天|明天|后天|(?:下周|本周|这周|周|星期)[一二三四五六日天]/g,

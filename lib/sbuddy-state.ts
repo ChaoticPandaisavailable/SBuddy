@@ -1,3 +1,4 @@
+import { validateSpriteManifest } from './sprite-animation';
 import {
   defaultAvatarStyle,
   normalizeAvatarStyle,
@@ -15,6 +16,10 @@ import {
   type RelationshipState,
 } from './relationship';
 import type { ScheduleEvent } from './schedule-parser';
+import { validCoursewareResult, type Courseware } from './courseware';
+import { normalizeStudyProfile, type StudyProfile } from './study-insight';
+import type { RigAppearance } from './companion-rig';
+import { normalizeBehavior, type BuddyBehavior } from './companion-behavior';
 
 export const STORAGE_KEY = 'sbuddy-state-v2';
 export type Buddy = {
@@ -26,6 +31,9 @@ export type Buddy = {
   relationship: RelationshipState;
   impressions: string[];
   photoKey?: string;
+  appearance?: RigAppearance;
+  legacyPreset?: boolean;
+  behavior?: BuddyBehavior;
 };
 export type FocusSession = {
   id: string;
@@ -54,16 +62,26 @@ export type Note = {
 };
 export type AppData = {
   version: 2;
+  studyProfile?: StudyProfile;
+  legacyPhotoPending?: boolean;
   legacyProfile?: unknown;
   buddies: Buddy[];
   activeBuddyId: string;
   events: ScheduleEvent[];
   campus: CampusDataState;
-  settings: { muted: boolean; reducedMotion: boolean; focusMinutes: number };
+  settings: {
+    muted: boolean;
+    reducedMotion: boolean;
+    focusMinutes: number;
+    showAcademicCalendar?: boolean;
+    room?: 'library' | 'classroom';
+    fatigueHours?: number;
+  };
   focus?: FocusSession;
   focusHistory: FocusRecord[];
   note: Note;
   material: string;
+  courseware?: Courseware;
   demo: boolean;
 };
 export const rewards = [
@@ -134,7 +152,9 @@ export function createBuddy(
     personality,
     preset,
     style: { ...style },
+    appearance: { preset: id === 'xiaohe' ? 'female' : 'male', rigVersion: 3 },
     relationship: freshRelationship(),
+    behavior: { mode: 'schedule' },
     impressions: [],
   };
 }
@@ -154,21 +174,22 @@ export function createAppData(): AppData {
       bottomColor: '#d8d4c9',
       accessory: 'glasses',
     }),
-    createBuddy('向阳', '活力陪伴', 'xiangyang', true, {
-      ...defaultAvatarStyle,
-      hairColor: '#8e5535',
-      topColor: '#c4914d',
-      bottomColor: '#e1d3bd',
-      hairStyleId: 'curly',
-    }),
   ];
   return {
     version: 2,
+    studyProfile: { energy: null },
     buddies,
     activeBuddyId: 'xiaohe',
     events: [],
     campus: createInitialCampusData(),
-    settings: { muted: false, reducedMotion: false, focusMinutes: 25 },
+    settings: {
+      muted: false,
+      room: 'library',
+      reducedMotion: false,
+      focusMinutes: 25,
+      fatigueHours: 6,
+      showAcademicCalendar: false,
+    },
     focusHistory: [],
     note: {
       id: 'current-note',
@@ -199,7 +220,7 @@ export function earnBond(
   relationship: RelationshipState,
   delta: number,
 ): RelationshipState {
-  const bond = Math.max(0, Math.min(100, relationship.bond + delta));
+  const bond = Math.max(0, Math.round(relationship.bond + delta));
   return {
     ...relationship,
     bond,
@@ -289,6 +310,48 @@ export function validEvent(e: ScheduleEvent): boolean {
     /^([01]\d|2[0-3]):[0-5]\d$/.test(e.time) &&
     /^([01]\d|2[0-3]):[0-5]\d$/.test(e.end) &&
     e.end > e.time &&
+    (e.remindMinutes === undefined ||
+      e.remindMinutes === null ||
+      (Number.isInteger(e.remindMinutes) &&
+        e.remindMinutes >= 0 &&
+        e.remindMinutes <= 1440)) &&
+    (!e.excludedDates ||
+      (Array.isArray(e.excludedDates) && e.excludedDates.every(validDate))) &&
+    (!e.repeat ||
+      (['daily', 'weekly', 'biweekly', 'monthly', 'yearly', 'custom'].includes(
+        e.repeat.kind,
+      ) &&
+        (!e.repeat.frequency ||
+          ['daily', 'weekly', 'monthly', 'yearly'].includes(
+            e.repeat.frequency,
+          )) &&
+        (e.repeat.interval === undefined ||
+          (Number.isInteger(e.repeat.interval) &&
+            e.repeat.interval >= 1 &&
+            e.repeat.interval <= 99)) &&
+        (!e.repeat.until ||
+          (validDate(e.repeat.until) && e.repeat.until >= e.date!)) &&
+        [
+          ['weekdays', 7],
+          ['monthDays', 31],
+          ['months', 12],
+        ].every(([key, max]) => {
+          const values = e.repeat![key as 'weekdays' | 'monthDays' | 'months'];
+          return (
+            values === undefined ||
+            (Array.isArray(values) &&
+              values.length > 0 &&
+              values.every(
+                (n) => Number.isInteger(n) && n >= 1 && n <= Number(max),
+              ))
+          );
+        }) &&
+        (e.repeat.ordinal === undefined ||
+          [1, 2, 3, 4, 5, -1, -2].includes(e.repeat.ordinal)) &&
+        (e.repeat.dayKind === undefined ||
+          ['natural', 'workday', 'weekend', 1, 2, 3, 4, 5, 6, 7].includes(
+            e.repeat.dayKind,
+          )))) &&
     ['class', 'study', 'meeting', 'personal'].includes(e.kind),
   );
 }
@@ -304,6 +367,22 @@ export function validateAppData(value: unknown): AppData {
   if (!value || typeof value !== 'object')
     throw new Error('不是有效的 SBuddy 数据。');
   const data = value as AppData;
+  if (data.courseware !== undefined) {
+    const c = data.courseware;
+    if (
+      !c ||
+      typeof c.title !== 'string' ||
+      c.title.length > 120 ||
+      typeof c.material !== 'string' ||
+      c.material.length > 50000 ||
+      (c.result !== undefined && !validCoursewareResult(c.result)) ||
+      (c.source !== undefined && typeof c.source !== 'string') ||
+      (c.resultMaterial !== undefined &&
+        (typeof c.resultMaterial !== 'string' ||
+          c.resultMaterial.length > 50000))
+    )
+      throw new Error('课件记录无效，未修改现有数据。');
+  }
   if (
     data.version !== 2 ||
     !Array.isArray(data.buddies) ||
@@ -336,6 +415,15 @@ export function validateAppData(value: unknown): AppData {
     campus.courses.length !== data.campus.courses.length ||
     campus.exams.length !== data.campus.exams.length ||
     campus.todos.length !== data.campus.todos.length ||
+    (data.campus.courseSnapshots !== undefined &&
+      (!Array.isArray(data.campus.courseSnapshots) ||
+        campus.courseSnapshots?.length !==
+          data.campus.courseSnapshots.length)) ||
+    [...data.campus.courses, ...(data.campus.courseSnapshots ?? [])].some(
+      (c) =>
+        c.excludedDates !== undefined &&
+        (!Array.isArray(c.excludedDates) || !c.excludedDates.every(validDate)),
+    ) ||
     data.campus.exams.some((e) => !validDate(e.date)) ||
     data.campus.todos.some(
       (todo) => todo.dueAt && !Number.isFinite(new Date(todo.dueAt).getTime()),
@@ -354,7 +442,6 @@ export function validateAppData(value: unknown): AppData {
         b.relationship &&
         Number.isFinite(b.relationship.bond) &&
         b.relationship.bond >= 0 &&
-        b.relationship.bond <= 100 &&
         b.relationship.preferences &&
         Object.values(b.relationship.preferences).every(
           (v) => typeof v === 'string',
@@ -400,11 +487,29 @@ export function validateAppData(value: unknown): AppData {
     )
   )
     throw new Error('专注记录无效。');
+  if (
+    data.buddies.some(
+      (b) =>
+        b.appearance?.rigVersion !== undefined &&
+        b.appearance.rigVersion !== 1 &&
+        b.appearance.rigVersion !== 2 &&
+        b.appearance.rigVersion !== 3,
+    )
+  )
+    throw new Error('人物素材版本不受支持，原数据已保留。');
   return {
     ...data,
     campus: normalizeCampusData(data.campus),
+    studyProfile: normalizeStudyProfile(
+      data.studyProfile ?? data.legacyProfile,
+    ),
     settings: {
       muted: !!data.settings.muted,
+      showAcademicCalendar: data.settings.showAcademicCalendar === true,
+      room: data.settings.room === 'classroom' ? 'classroom' : 'library',
+      fatigueHours: Number.isFinite(data.settings.fatigueHours)
+        ? Math.max(1, Math.min(24, data.settings.fatigueHours!))
+        : 6,
       reducedMotion: !!data.settings.reducedMotion,
       focusMinutes: Math.max(
         1,
@@ -413,9 +518,41 @@ export function validateAppData(value: unknown): AppData {
     },
     buddies: data.buddies.map((b) => ({
       ...b,
+      ...(b.id === 'xiangyang' && b.preset
+        ? { preset: false, legacyPreset: true }
+        : {}),
+      appearance: {
+        rigVersion: !b.appearance?.atlasKey
+          ? 3
+          : b.appearance.rigVersion === 3
+            ? 3
+            : b.appearance.rigVersion === 2
+              ? 2
+              : 1,
+        ...(b.appearance?.rigVersion === 3 && b.appearance.atlasKey
+          ? {
+              spriteManifest: validateSpriteManifest(
+                b.appearance.spriteManifest,
+              ),
+            }
+          : {}),
+        preset:
+          b.appearance?.preset === 'female' ||
+          (!b.appearance && b.id === 'xiaohe')
+            ? 'female'
+            : 'male',
+        ...(typeof b.appearance?.atlasKey === 'string'
+          ? { atlasKey: b.appearance.atlasKey }
+          : {}),
+        ...(b.appearance?.photoMode === 'full-body' ||
+        b.appearance?.photoMode === 'head-only'
+          ? { photoMode: b.appearance.photoMode }
+          : {}),
+      },
       name: b.name.slice(0, 24),
       style: normalizeAvatarStyle(b.style),
       relationship: normalizeRelationship(b.relationship),
+      behavior: normalizeBehavior(b.behavior),
     })),
   };
 }
@@ -427,6 +564,7 @@ export function migrateLegacy(read: (key: string) => string | null): AppData {
   };
   const relationship = json('study-buddies-relationship');
   const style = json('study-buddies-avatar-style');
+  data.legacyPhotoPending = Boolean(read('study-buddies-avatar'));
   if (relationship)
     data.buddies[0].relationship = normalizeRelationship(relationship);
   if (style) data.buddies[0].style = normalizeAvatarStyle(style);
@@ -443,6 +581,7 @@ export function migrateLegacy(read: (key: string) => string | null): AppData {
   const profile = json('study-buddies-profile');
   if (profile) {
     data.legacyProfile = profile;
+    data.studyProfile = normalizeStudyProfile(profile);
     if (Array.isArray(profile.focusHistory))
       data.focusHistory = profile.focusHistory
         .filter(

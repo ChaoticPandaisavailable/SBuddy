@@ -1,52 +1,17 @@
 'use client';
 import { useState } from 'react';
+import { summarizeImpression } from '@/lib/impression-summary';
 import { Check, Plus, Trash2, Upload } from 'lucide-react';
 import { useStudy } from './provider';
 import { BuddyStage, Dialog, PageTitle } from './app';
 import { createBuddy, updateBuddy } from '@/lib/sbuddy-state';
-import {
-  defaultAvatarStyle,
-  hairStyleOptions,
-  normalizeAvatarStyle,
-} from '@/lib/avatar-style';
-import { analyzeLocalAvatarStyle, pixelatePhoto } from '@/lib/pixelate';
+import { defaultAvatarStyle } from '@/lib/avatar-style';
+import { validateGeneratedRig } from '@/lib/rig-assets';
+import type { BodyPreset } from '@/lib/companion-rig';
 import { assetTransaction } from '@/lib/sbuddy-storage';
+import { validateSpriteManifest } from '@/lib/sprite-animation';
 import { PixelCompanionCanvas } from '@/components/pixel-companion-canvas';
 
-const preferenceLabels: Record<string, string> = {
-  reminderStyle: '提醒方式',
-  taskApproach: '开始任务',
-  socialTone: '相处语气',
-  breakStyle: '休息偏好',
-};
-const values: Record<string, string> = {
-  gentle: '温柔提醒',
-  direct: '直接一点',
-  quiet: '安静陪伴',
-  tiny: '从小事开始',
-  plan: '先列个计划',
-  playful: '轻松一点',
-  warm: '温暖鼓励',
-  walk: '起来走走',
-  rest: '安静休息',
-  'tiny-step': '从最小的一步开始',
-  overview: '先理清全局',
-  space: '留一点缓冲空间',
-  'urgent-first': '先处理紧急的事',
-  'easy-first': '先做容易启动的',
-  'important-first': '先看最重要的',
-  continue: '再来一小段专注',
-  short: '先休息五分钟',
-  done: '适时停下来',
-  'resume-direct': '提醒我上次的进度',
-  'warm-welcome': '回来时打个招呼',
-  'quiet-return': '安静地接着做',
-  music: '听一首歌',
-  phone: '刷一会儿手机',
-  'single-entry': '每次只给一个起点',
-  'draft-first': '先有草稿，再慢慢完善',
-  'sprint-boring': '用短冲刺完成任务',
-};
 export function Characters() {
   const { data, setData, notify } = useStudy();
   const buddy = data.buddies.find((b) => b.id === data.activeBuddyId)!;
@@ -55,12 +20,13 @@ export function Characters() {
   const [personality, setPersonality] = useState('温柔鼓励');
   const [impression, setImpression] = useState('');
   const [busyId, setBusyId] = useState('');
+  const [bodyPreset, setBodyPreset] = useState<BodyPreset>('female');
   const change = (update: Parameters<typeof updateBuddy>[2]) =>
     setData((d) => updateBuddy(d, buddy.id, update));
   const upload = async (file?: File) => {
     if (!file) return;
-    if (!file.type.startsWith('image/') || file.size > 10 * 1024 * 1024) {
-      notify('请选择 10 MB 以内的图片。');
+    if (!file.type.startsWith('image/') || file.size > 8 * 1024 * 1024) {
+      notify('请选择 8 MB 以内的单人照片，只有人头也可以。');
       return;
     }
     const id = buddy.id;
@@ -68,32 +34,88 @@ export function Characters() {
     try {
       const form = new FormData();
       form.set('image', file);
-      let style = await analyzeLocalAvatarStyle(file);
-      let message = '已按照片的色彩更新像素造型。';
-      try {
-        const response = await fetch('/api/ai/avatar-style', {
-          method: 'POST',
-          body: form,
-        });
-        const result = (await response.json()) as {
-          style?: typeof style;
-          source?: string;
-        };
-        if (response.ok && result.style) {
-          style = normalizeAvatarStyle(result.style);
-          if (result.source === 'ai') message = '已根据照片分析更新像素造型。';
-        }
-      } catch {
-        /* Local color extraction remains usable. */
+      const preset = buddy.appearance?.preset ?? 'female';
+      form.set('preset', preset);
+      notify(
+        '正在识别照片并生成完整人物，可能需要几分钟；原人物会保留到生成成功。',
+      );
+      const response = await fetch('/api/ai/avatar', {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(300000),
+      });
+      if (!response.headers.get('content-type')?.includes('application/json')) {
+        throw new Error(
+          '无法生成：服务返回异常，请检查访问地址或稍后重试。原人物已保留。',
+        );
       }
-      const photo = await pixelatePhoto(file);
+      const result = (await response.json()) as {
+        imageUrl?: string;
+        rigVersion?: number;
+        spriteManifest?: unknown;
+        photoMode?: 'full-body' | 'head-only';
+        error?: string;
+      };
+      if (
+        !response.ok ||
+        !result.imageUrl ||
+        (result.rigVersion !== 1 &&
+          result.rigVersion !== 2 &&
+          result.rigVersion !== 3)
+      )
+        throw new Error(
+          result.error || '无法生成完整人物，请换一张清晰的单人照片。',
+        );
+      const rigVersion = result.rigVersion;
+      const spriteManifest =
+        rigVersion === 3
+          ? validateSpriteManifest(result.spriteManifest)
+          : undefined;
+      await validateGeneratedRig(result.imageUrl, rigVersion);
+      const atlasKey = 'rig-' + id + '-' + Date.now();
       const photoKey = 'photo-' + id + '-' + Date.now();
-      await assetTransaction({ [photoKey]: photo });
-      setData((d) => updateBuddy(d, id, (b) => ({ ...b, style, photoKey })));
-      notify(message);
+      const originalPhoto = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () =>
+          typeof reader.result === 'string'
+            ? resolve(reader.result)
+            : reject(new Error('原照片格式无法读取。'));
+        reader.onerror = () =>
+          reject(new Error('原照片无法读取，未替换人物。'));
+        reader.readAsDataURL(file);
+      });
+      await assetTransaction({
+        [atlasKey]: result.imageUrl,
+        [photoKey]: originalPhoto,
+      });
+      setData((d) =>
+        updateBuddy(d, id, (b) => ({
+          ...b,
+          photoKey,
+          appearance: {
+            preset,
+            atlasKey,
+            rigVersion,
+            ...(spriteManifest ? { spriteManifest } : {}),
+            photoMode: result.photoMode,
+          },
+        })),
+      );
+      notify(
+        result.photoMode === 'head-only'
+          ? '已根据人头生成完整人物，缺少的身体部分使用所选基础人物补全。'
+          : '完整人物已生成，已应用到全部活动和连接动作。',
+      );
     } catch (error) {
       notify(
-        error instanceof Error ? error.message : '照片处理失败，请换一张图片。',
+        error instanceof Error &&
+          ['TimeoutError', 'AbortError'].includes(error.name)
+          ? '生成等待超时，请稍后重试。原人物已保留。'
+          : error instanceof TypeError
+            ? '无法连接人物生成服务，请检查网络。原人物已保留。'
+            : error instanceof Error
+              ? error.message
+              : '照片处理失败，请换一张图片。',
       );
     } finally {
       setBusyId('');
@@ -101,34 +123,52 @@ export function Characters() {
   };
   return (
     <>
-      <PageTitle
-        title="认识你的学习搭子"
-        description="不一样的性格，一样认真地陪着你。"
-      />
+      <PageTitle title="角色" />
       <div className="character-columns">
         <aside className="candidate-rail">
           <div className="section-heading">
             <h2>候选角色</h2>
-            <span>{data.buddies.length} 位</span>
+            <span>{data.buddies.filter((b) => !b.legacyPreset).length} 位</span>
           </div>
-          {data.buddies.map((b) => (
-            <button
-              key={b.id}
-              className={'candidate ' + (b.id === buddy.id ? 'selected' : '')}
-              onClick={() => setData((d) => ({ ...d, activeBuddyId: b.id }))}
-            >
-              <PixelCompanionCanvas
-                state="idle"
-                avatarStyle={b.style}
-                compact
-              />
-              <span>
-                <strong>{b.name}</strong>
-                <small>{b.personality}</small>
-              </span>
-              {b.id === buddy.id && <Check size={17} />}
-            </button>
-          ))}
+          {data.buddies
+            .filter((b) => !b.legacyPreset)
+            .map((b) => (
+              <button
+                key={b.id}
+                className={'candidate ' + (b.id === buddy.id ? 'selected' : '')}
+                onClick={() => setData((d) => ({ ...d, activeBuddyId: b.id }))}
+              >
+                <PixelCompanionCanvas
+                  state="idle"
+                  avatarStyle={b.style}
+                  appearance={b.appearance}
+                  compact
+                />
+                <span>
+                  <strong>{b.name}</strong>
+                  <small>{b.personality}</small>
+                </span>
+                {b.id === buddy.id && <Check size={17} />}
+              </button>
+            ))}
+          {data.buddies.some((b) => b.legacyPreset) && (
+            <details className="legacy-characters">
+              <summary>旧版搭子 · 已保留记录</summary>
+              {data.buddies
+                .filter((b) => b.legacyPreset)
+                .map((b) => (
+                  <button
+                    className="secondary-button"
+                    key={b.id}
+                    onClick={() =>
+                      setData((d) => ({ ...d, activeBuddyId: b.id }))
+                    }
+                  >
+                    {b.name}
+                  </button>
+                ))}
+            </details>
+          )}
           <button className="add-candidate" onClick={() => setCreating(true)}>
             <Plus size={26} />
             <span>认识一位新搭子</span>
@@ -136,7 +176,7 @@ export function Characters() {
         </aside>
         <section className="current-character">
           <h2>当前角色</h2>
-          <BuddyStage buddy={buddy} animation="greet" />
+          <BuddyStage buddy={buddy} animation="greet" scene={false} />
           <div className="character-name">
             <h3>{buddy.name}</h3>
             <span className="pill">{buddy.personality}</span>
@@ -169,70 +209,24 @@ export function Characters() {
               </select>
             </label>
             <label>
-              发型
+              基础人物
               <select
-                value={buddy.style.hairStyleId}
+                value={buddy.appearance?.preset ?? 'female'}
+                disabled={!!busyId}
                 onChange={(e) =>
                   change((b) => ({
                     ...b,
-                    style: normalizeAvatarStyle({
-                      ...b.style,
-                      hairStyleId: e.target.value as typeof b.style.hairStyleId,
-                    }),
+                    appearance: { preset: e.target.value as BodyPreset },
                   }))
                 }
               >
-                {hairStyleOptions.map((o) => (
-                  <option key={o.id} value={o.id}>
-                    {o.label}
-                  </option>
-                ))}
+                <option value="female">女生 · 小禾</option>
+                <option value="male">男生 · 知序</option>
               </select>
             </label>
-            <label>
-              配饰
-              <select
-                value={buddy.style.accessory}
-                onChange={(e) =>
-                  change((b) => ({
-                    ...b,
-                    style: {
-                      ...b.style,
-                      accessory:
-                        e.target.value === 'glasses' ? 'glasses' : 'none',
-                    },
-                  }))
-                }
-              >
-                <option value="none">无配饰</option>
-                <option value="glasses">眼镜</option>
-              </select>
-            </label>
-            <div className="color-controls">
-              {(
-                [
-                  ['hairColor', '发色'],
-                  ['skinTone', '肤色'],
-                  ['topColor', '上衣'],
-                  ['bottomColor', '下装'],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key}>
-                  {label}
-                  <input
-                    aria-label={label}
-                    type="color"
-                    value={buddy.style[key]}
-                    onChange={(e) =>
-                      change((b) => ({
-                        ...b,
-                        style: { ...b.style, [key]: e.target.value },
-                      }))
-                    }
-                  />
-                </label>
-              ))}
-            </div>
+            <p className="muted">
+              支持单人照和人头照。切换基础人物会重置外观。
+            </p>
           </div>
           <div className="button-row">
             <label
@@ -241,7 +235,7 @@ export function Characters() {
               }
             >
               <Upload size={17} />
-              {busyId === buddy.id ? '正在处理照片…' : '照片生成造型'}
+              {busyId === buddy.id ? '正在生成完整人物…' : '照片生成完整人物'}
               <input
                 type="file"
                 accept="image/*"
@@ -276,13 +270,10 @@ export function Characters() {
               </button>
             )}
           </div>
-          <p className="muted small">
-            照片用于提取配色与造型，搭子保留统一的像素动画骨架。
-          </p>
+          <p className="muted small">照片生成需要配置图像服务。</p>
         </section>
         <aside className="impression-rail">
           <h2>对我的印象</h2>
-          <p>相处中的小细节，TA 都记着。</p>
           <div className="impression-bond">
             <span>{buddy.relationship.bondLevel}</span>
             <strong>
@@ -290,78 +281,49 @@ export function Characters() {
               <small> 默契</small>
             </strong>
           </div>
-          {Object.entries(buddy.relationship.preferences).map(
-            ([key, value]) => (
-              <div className="impression" key={key}>
-                <small>{preferenceLabels[key] ?? key} · 来自对话</small>
-                <p>{values[value] ?? value}</p>
-              </div>
-            ),
+          <p className="impression-description" aria-live="polite">
+            {summarizeImpression(buddy, data.focusHistory)}
+          </p>
+          {!!buddy.impressions.length && (
+            <details className="memory-manager">
+              <summary>管理记忆</summary>
+              {buddy.impressions.map((text, index) => (
+                <div className="impression" key={index}>
+                  <p>{text}</p>
+                  <button
+                    className="icon-button"
+                    aria-label={'删除记忆 ' + text}
+                    onClick={() =>
+                      change((b) => ({
+                        ...b,
+                        impressions: b.impressions.filter(
+                          (_, i) => i !== index,
+                        ),
+                      }))
+                    }
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </details>
           )}
-          {buddy.impressions.map((text, index) => (
-            <div className="impression" key={index}>
-              <small>你告诉 TA 的</small>
-              <p>{text}</p>
-              <button
-                className="icon-button"
-                aria-label={'删除印象 ' + text}
-                onClick={() =>
-                  change((b) => ({
-                    ...b,
-                    impressions: b.impressions.filter((_, i) => i !== index),
-                  }))
-                }
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-          {data.focusHistory
-            .filter((record) => record.buddyId === buddy.id && record.feedback)
-            .slice(-3)
-            .reverse()
-            .map((record) => (
-              <div className="impression" key={record.id}>
-                <small>
-                  学习反馈 · {new Date(record.at).toLocaleDateString('zh-CN')}
-                </small>
-                <p>
-                  {record.minutes} 分钟专注后，你说：
-                  {(
-                    {
-                      steady: '节奏刚好，状态不错',
-                      tired: '有些累，需要休息',
-                      distracted: '容易分心，下次缩短一点',
-                    } as Record<string, string>
-                  )[record.feedback!] ?? record.feedback}
-                </p>
-              </div>
-            ))}
-          {!data.focusHistory.some(
-            (record) => record.buddyId === buddy.id && record.feedback,
-          ) &&
-            !buddy.impressions.length &&
-            !Object.keys(buddy.relationship.preferences).length && (
-              <div className="empty-compact">
-                还在慢慢了解你。
-                <br />
-                聊聊天，让 TA 更懂你的节奏。
-              </div>
-            )}
           <form
             onSubmit={(e) => {
               e.preventDefault();
               if (impression.trim()) {
                 change((b) => ({
                   ...b,
-                  impressions: [...b.impressions, impression.trim()],
+                  impressions: [
+                    ...new Set([...b.impressions, impression.trim()]),
+                  ],
                 }));
                 setImpression('');
               }
             }}
           >
             <label>
-              告诉 TA 一件关于你的事
+              补充学习习惯
               <textarea
                 placeholder="例如：我喜欢在晚饭后去图书馆。"
                 value={impression}
@@ -371,7 +333,7 @@ export function Characters() {
             </label>
             <button className="secondary-button" disabled={!impression.trim()}>
               <Plus size={16} />
-              记住这件事
+              更新印象
             </button>
           </form>
         </aside>
@@ -394,6 +356,7 @@ export function Characters() {
                   topColor: '#748b64',
                 },
               );
+              next.appearance = { preset: bodyPreset };
               setData((d) => ({
                 ...d,
                 buddies: [...d.buddies, next],
@@ -424,9 +387,17 @@ export function Characters() {
                 <option>活力陪伴</option>
               </select>
             </label>
-            <p className="muted">
-              见面后可以调整发型、配色，或上传照片生成造型。
-            </p>
+            <label>
+              基础人物
+              <select
+                value={bodyPreset}
+                onChange={(e) => setBodyPreset(e.target.value as BodyPreset)}
+              >
+                <option value="female">女生 · 小禾</option>
+                <option value="male">男生 · 知序</option>
+              </select>
+            </label>
+
             <button className="primary-button">
               很高兴认识你
               <Check size={17} />

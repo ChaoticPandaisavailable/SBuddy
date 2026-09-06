@@ -73,4 +73,3 @@ function timeToMinutes(value: string): number {
   const [hours = '0', minutes = '0'] = value.split(':');
   return Number(hours) * 60 + Number(minutes);
 }
-

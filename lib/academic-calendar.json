@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "source": "https://www.ruc.edu.cn/xiaoli.html",
+  "semesters": [
+    {
+      "id": "2025-2026-1",
+      "label": "2025-2026 学年秋季学期",
+      "start": "2025-09-08",
+      "end": "2026-01-11",
+      "week1_monday": "2025-09-08"
+    },
+    {
+      "id": "2025-2026-2",
+      "label": "2025-2026 学年春季学期",
+      "start": "2026-03-02",
+      "end": "2026-07-12",
+      "week1_monday": "2026-03-02"
+    },
+    {
+      "id": "2026-2027-1",
+      "label": "2026-2027 学年秋季学期",
+      "start": "2026-09-07",
+      "end": "2027-01-10",
+      "week1_monday": "2026-09-07"
+    },
+    {
+      "id": "2026-2027-2",
+      "label": "2026-2027 学年春季学期",
+      "start": "2027-02-22",
+      "end": "2027-07-04",
+      "week1_monday": "2027-02-22"
+    }
+  ],
+  "events": [
+    {"id": "hol-2025-ny", "title": "元旦假期", "date": "2025-01-01", "kind": "holiday", "system": true},
+    {"id": "hol-2025-spring", "title": "春节假期", "date": "2025-01-28", "end_date": "2025-02-04", "kind": "holiday", "system": true},
+    {"id": "mk-2025-spring-1", "title": "春节调休上班", "date": "2025-01-26", "kind": "makeup", "system": true},
+    {"id": "mk-2025-spring-2", "title": "春节调休上班", "date": "2025-02-08", "kind": "makeup", "system": true},
+    {"id": "hol-2025-qm", "title": "清明假期", "date": "2025-04-04", "end_date": "2025-04-06", "kind": "holiday", "system": true},
+    {"id": "hol-2025-labor", "title": "劳动节假期", "date": "2025-05-01", "end_date": "2025-05-05", "kind": "holiday", "system": true},
+    {"id": "mk-2025-labor", "title": "劳动节调休上班", "date": "2025-04-27", "kind": "makeup", "system": true},
+    {"id": "hol-2025-duanwu", "title": "端午假期", "date": "2025-05-31", "end_date": "2025-06-02", "kind": "holiday", "system": true},
+    {"id": "term-2025-fall", "title": "秋季学期开学", "date": "2025-09-08", "kind": "term", "system": true},
+    {"id": "mk-2025-nd-1", "title": "国庆调休上课", "date": "2025-09-28", "kind": "makeup", "system": true},
+    {"id": "hol-2025-nd", "title": "国庆中秋假期", "date": "2025-10-01", "end_date": "2025-10-08", "kind": "holiday", "system": true},
+    {"id": "anni-2025", "title": "校庆日", "date": "2025-10-03", "kind": "校历", "system": true},
+    {"id": "mk-2025-nd-2", "title": "国庆调休上课", "date": "2025-10-11", "kind": "makeup", "system": true},
+    {"id": "exam-2025-1", "title": "秋季学期考试周", "date": "2025-12-29", "end_date": "2026-01-09", "kind": "exam", "system": true},
+    {"id": "hol-2026-ny", "title": "元旦假期", "date": "2026-01-01", "end_date": "2026-01-03", "kind": "holiday", "system": true},
+    {"id": "mk-2026-ny", "title": "元旦调休上班", "date": "2026-01-04", "kind": "makeup", "system": true},
+    {"id": "vac-2026-winter", "title": "寒假", "date": "2026-01-12", "end_date": "2026-03-01", "kind": "break", "system": true},
+    {"id": "mk-2026-spring-1", "title": "春节调休上班", "date": "2026-02-14", "kind": "makeup", "system": true},
+    {"id": "hol-2026-spring", "title": "春节假期", "date": "2026-02-15", "end_date": "2026-02-23", "kind": "holiday", "system": true},
+    {"id": "mk-2026-spring-2", "title": "春节调休上班", "date": "2026-02-28", "kind": "makeup", "system": true},
+    {"id": "term-2026-spring", "title": "春季学期开学", "date": "2026-03-02", "kind": "term", "system": true},
+    {"id": "hol-2026-qm", "title": "清明假期", "date": "2026-04-04", "end_date": "2026-04-06", "kind": "holiday", "system": true},
+    {"id": "hol-2026-labor", "title": "劳动节假期", "date": "2026-05-01", "end_date": "2026-05-05", "kind": "holiday", "system": true},
+    {"id": "mk-2026-labor", "title": "劳动节调休上班", "date": "2026-05-09", "kind": "makeup", "system": true},
+    {"id": "hol-2026-duanwu", "title": "端午假期", "date": "2026-06-19", "end_date": "2026-06-21", "kind": "holiday", "system": true},
+    {"id": "exam-2026-2", "title": "春季学期考试周", "date": "2026-06-22", "end_date": "2026-07-03", "kind": "exam", "system": true},
+    {"id": "vac-2026-summer", "title": "暑假", "date": "2026-07-13", "end_date": "2026-09-06", "kind": "break", "system": true},
+    {"id": "term-2026-fall", "title": "秋季学期开学", "date": "2026-09-07", "kind": "term", "system": true},
+    {"id": "mk-2026-nd-1", "title": "国庆调休上课（按周二课表）", "date": "2026-09-20", "kind": "makeup", "system": true, "follows_weekday": 2},
+    {"id": "hol-2026-midautumn", "title": "中秋假期", "date": "2026-09-25", "end_date": "2026-09-27", "kind": "holiday", "system": true},
+    {"id": "hol-2026-nd", "title": "国庆假期", "date": "2026-10-01", "end_date": "2026-10-07", "kind": "holiday", "system": true},
+    {"id": "anni-2026", "title": "校庆日", "date": "2026-10-03", "kind": "校历", "system": true},
+    {"id": "mk-2026-nd-2", "title": "国庆调休上课（按周三课表）", "date": "2026-10-10", "kind": "makeup", "system": true, "follows_weekday": 3},
+    {"id": "exam-2026-1", "title": "秋季学期考试周", "date": "2026-12-28", "end_date": "2027-01-08", "kind": "exam", "system": true},
+    {"id": "hol-2027-ny", "title": "元旦假期", "date": "2027-01-01", "kind": "holiday", "system": true},
+    {"id": "vac-2027-winter", "title": "寒假", "date": "2027-01-11", "end_date": "2027-02-21", "kind": "break", "system": true},
+    {"id": "hol-2027-spring", "title": "春节", "date": "2027-02-06", "kind": "holiday", "system": true},
+    {"id": "term-2027-spring", "title": "春季学期开学", "date": "2027-02-22", "kind": "term", "system": true},
+    {"id": "hol-2027-qm", "title": "清明假期", "date": "2027-04-05", "kind": "holiday", "system": true},
+    {"id": "hol-2027-labor", "title": "劳动节", "date": "2027-05-01", "kind": "holiday", "system": true},
+    {"id": "hol-2027-duanwu", "title": "端午假期", "date": "2027-06-09", "kind": "holiday", "system": true},
+    {"id": "exam-2027-2", "title": "春季学期考试周", "date": "2027-06-14", "end_date": "2027-06-25", "kind": "exam", "system": true},
+    {"id": "vac-2027-summer", "title": "暑假", "date": "2027-07-05", "kind": "break", "system": true}
+  ]
+}

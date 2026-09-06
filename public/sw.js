@@ -1,5 +1,5 @@
-const CACHE_NAME = 'study-buddies-shell-v4';
-const CORE_ASSETS = ['/', '/manifest.webmanifest', '/favicon.svg', '/pixel-companion-sheet.png', '/pixel-companion-atlas.png'];
+const CACHE_NAME = 'study-buddies-shell-v15';
+const CORE_ASSETS = ['/', '/manifest.webmanifest', '/favicon.svg', '/characters/female-rig.png', '/characters/male-rig.png', '/characters/study-props.png', '/characters/female-chibi-v2.png', '/characters/male-chibi-v2.png', '/scenes/library-v2.png', '/scenes/classroom-v2.png', '/scenes/desk-v2.png', '/characters/female-sprite-v3.png', '/characters/male-sprite-v3.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)));
@@ -10,7 +10,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))),
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith('study-buddies-shell-') && key !== CACHE_NAME).map((key) => caches.delete(key)))),
   );
   self.clients.claim();
 });
@@ -32,4 +32,3 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(request).then((cached) => cached || caches.match('/'))),
   );
 });
-

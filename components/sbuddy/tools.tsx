@@ -1,9 +1,10 @@
 'use client';
+import { flushSync } from 'react-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
-  CalendarSearch,
+  BookOpen,
   Check,
   FileText,
   Hand,
@@ -12,34 +13,24 @@ import {
   RotateCcw,
   Square,
   Timer,
-  Trash2,
   Upload,
 } from 'lucide-react';
 import { useStudy } from './provider';
 import { BuddyStage, FocusControls, PageTitle, type Tool } from './app';
-import { EventForm } from './daily';
-import { CampusSyncPanel } from '@/components/campus-calendar-workspace';
+import { CoursewareTool } from './courseware-tool';
 import {
   useGestureCamera,
   type CompanionGesture,
 } from '@/hooks/use-gesture-camera';
-import {
-  localDate,
-  mergeEvents,
-  validEvent,
-  type Note,
-} from '@/lib/sbuddy-state';
-import {
-  parseScheduleMaterial,
-  type ScheduleEvent,
-} from '@/lib/schedule-parser';
+import { type Note } from '@/lib/sbuddy-state';
 import { newCampusId, upsertTodo } from '@/lib/campus-data';
+import { beginDictation, type SpeechConstructor } from '@/lib/live-dictation';
+import { localNoteSummary } from '@/lib/showcase';
 
 type ApiResult = {
   error?: string;
   source: string;
   warning?: string;
-  events: ScheduleEvent[];
   transcript: string;
   summary: string;
   highlights: string[];
@@ -49,39 +40,37 @@ export function Tools({
   active,
   tool,
   onSelect,
-  onCalendar,
 }: {
   active: boolean;
   tool: Tool;
   onSelect: (tool: Tool) => void;
-  onCalendar: () => void;
 }) {
   const cards = [
     {
-      id: 'schedule',
-      title: '日程识别',
-      note: '把课表、通知和文字，变成清晰的安排。',
-      icon: CalendarSearch,
+      id: 'courseware',
+      title: '课件整理',
+      note: '梳理重点与复习提纲',
+      icon: BookOpen,
       color: 'sage',
     },
     {
       id: 'notes',
       title: '纪要',
-      note: '认真听就好，重要的事帮你记下来。',
+      note: '录音与文字整理',
       icon: FileText,
       color: 'sand',
     },
     {
       id: 'gesture',
       title: '手势识别',
-      note: '挥挥手，就能和搭子打个招呼。',
+      note: '摄像头互动',
       icon: Hand,
       color: 'rose',
     },
     {
       id: 'focus',
       title: '番茄钟',
-      note: '留一小段时间，只做眼前这一件事。',
+      note: '专注计时',
       icon: Timer,
       color: 'blue',
     },
@@ -89,10 +78,7 @@ export function Tools({
   return (
     <>
       <div hidden={!!tool}>
-        <PageTitle
-          title="让学习轻松一点"
-          description="一些顺手的小工具，留更多心思给重要的事。"
-        />
+        <PageTitle title="工具" />
         <div className="tools-grid">
           {cards.map((card) => (
             <button
@@ -111,9 +97,6 @@ export function Tools({
             </button>
           ))}
         </div>
-        <p className="tools-footnote">
-          工具与你的日历和搭子相连，准备好就开始吧。
-        </p>
       </div>
       {tool && (
         <button
@@ -124,8 +107,8 @@ export function Tools({
           返回工具
         </button>
       )}
-      <div hidden={tool !== 'schedule'}>
-        <ScheduleTool onCalendar={onCalendar} />
+      <div hidden={tool !== 'courseware'}>
+        <CoursewareTool />
       </div>
       <div hidden={tool !== 'notes'}>
         <NotesTool active={active && tool === 'notes'} />
@@ -134,204 +117,18 @@ export function Tools({
         <GestureTool active={active && tool === 'gesture'} />
       </div>
       <div hidden={tool !== 'focus'}>
-        <FocusTool />
-      </div>
-    </>
-  );
-}
-function ScheduleTool({ onCalendar }: { onCalendar: () => void }) {
-  const { data, setData, notify } = useStudy();
-  const [tab, setTab] = useState('text');
-  const [preview, setPreview] = useState<ScheduleEvent[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [source, setSource] = useState('');
-  const parse = async () => {
-    if (!data.material.trim()) return;
-    setBusy(true);
-    try {
-      const response = await fetch('/api/ai/schedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          material: data.material,
-          referenceDate: localDate(),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
-      });
-      const result = (await response.json()) as ApiResult;
-      if (!response.ok) throw new Error(result.error || '识别失败');
-      setPreview(result.events);
-      setSource(
-        result.source === 'ai'
-          ? 'AI 识别结果，请核对后保存。'
-          : (result.warning ?? '本地规则识别，请确认信息。'),
-      );
-    } catch {
-      setPreview(parseScheduleMaterial(data.material));
-      setSource('服务暂时不可用，已使用本地规则识别，请补全日期与时间。');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <>
-      <PageTitle
-        title="日程识别"
-        description="从一段文字、一张课表开始，把安排收进日历。"
-      />
-      <div className="section-tabs">
-        <button
-          className={tab === 'text' ? 'active' : ''}
-          onClick={() => setTab('text')}
-        >
-          文字日程
-        </button>
-        <button
-          className={tab === 'campus' ? 'active' : ''}
-          onClick={() => setTab('campus')}
-        >
-          课表与考试 · 采集 / 文件 / 截图
-        </button>
-      </div>
-      <div hidden={tab !== 'text'} className="import-columns">
-        <section className="paper-panel">
-          <h2>把安排放在这里</h2>
-          <label>
-            日程材料
-            <textarea
-              className="large-textarea"
-              placeholder={
-                '例如：明天 14:00–16:00 图书馆自习\n周五 09:00–10:00 设计小组会议，地点：教学楼 B203'
-              }
-              value={data.material}
-              maxLength={12000}
-              onChange={(e) =>
-                setData((d) => ({ ...d, material: e.target.value }))
-              }
-            />
-          </label>
-          <div className="button-row">
-            <button
-              className="primary-button"
-              disabled={busy || !data.material.trim()}
-              onClick={() => void parse()}
-            >
-              <CalendarSearch size={17} />
-              {busy ? '正在识别…' : '识别日程'}
-            </button>
-            <label className="secondary-button upload-label">
-              <Upload size={16} />
-              上传文本
-              <input
-                type="file"
-                accept=".txt,.csv"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    if (file.size > 200000) {
-                      notify('请选择 200 KB 以内的文本。');
-                      return;
-                    }
-                    void file
-                      .text()
-                      .then((text) =>
-                        setData((d) => ({
-                          ...d,
-                          material: text.slice(0, 12000),
-                        })),
-                      )
-                      .catch(() => notify('无法读取文件。'));
-                  }
-                  e.target.value = '';
-                }}
-              />
-            </label>
-          </div>
-          <p className="muted small">
-            识别不会直接修改日历。不确定的信息留给你确认。
-          </p>
-        </section>
-        <section className="paper-panel">
-          <div className="section-heading">
-            <h2>确认这些安排</h2>
-            <span>{preview.length} 项</span>
-          </div>
-          {source && <p className="inline-message">{source}</p>}
-          {!preview.length ? (
-            <div className="empty-compact">
-              识别结果会出现在这里。
-              <br />
-              核对日期和起止时间后，再放进日历。
-            </div>
-          ) : (
-            <>
-              <div className="preview-scroll">
-                {preview.map((event, i) => (
-                  <div className="preview-event" key={event.id}>
-                    <EventForm
-                      event={event}
-                      onChange={(next) =>
-                        setPreview((list) =>
-                          list.map((e, index) => (index === i ? next : e)),
-                        )
-                      }
-                    />
-                    <button
-                      className="text-button danger"
-                      onClick={() =>
-                        setPreview((list) =>
-                          list.filter((_, index) => index !== i),
-                        )
-                      }
-                    >
-                      <Trash2 size={15} />
-                      移除这项
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {!preview.every(validEvent) && (
-                <p className="validation">
-                  请补全每项标题、日期和时间，结束时间需晚于开始时间。
-                </p>
-              )}
-              <button
-                className="primary-button full-width"
-                disabled={!preview.every(validEvent)}
-                onClick={() => {
-                  setData((d) => ({
-                    ...d,
-                    events: mergeEvents(d.events, preview),
-                  }));
-                  setPreview([]);
-                  notify('日程已保存，重复条目会自动跳过。');
-                  onCalendar();
-                }}
-              >
-                <Check size={16} />
-                确认写入日历
-              </button>
-            </>
-          )}
-        </section>
-      </div>
-      <div hidden={tab !== 'campus'} className="campus-import">
-        <CampusSyncPanel
-          data={data.campus}
-          onChange={(campus) => setData((d) => ({ ...d, campus }))}
-        />
-        <button className="secondary-button" onClick={onCalendar}>
-          查看日历
-          <ArrowRight size={16} />
-        </button>
+        {active && tool === 'focus' && <FocusTool />}
       </div>
     </>
   );
 }
 function NotesTool({ active }: { active: boolean }) {
-  const { data, setData, notify } = useStudy();
+  const { data, setData, notify, showcase } = useStudy();
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [dictating, setDictating] = useState(false);
+  const [interim, setInterim] = useState('');
+  const stopDictation = useRef<(() => void) | undefined>(undefined);
   const [audioUrl, setAudioUrl] = useState('');
   const [status, setStatus] = useState('');
   const recorder = useRef<MediaRecorder | undefined>(undefined);
@@ -342,6 +139,55 @@ function NotesTool({ active }: { active: boolean }) {
   const note = data.note;
   const patch = (value: Partial<Note>) =>
     setData((d) => ({ ...d, note: { ...d.note, ...value } }));
+  const endDictation = useCallback(() => {
+    const stop = stopDictation.current;
+    stopDictation.current = undefined;
+    // Release the controls before a browser's native speech abort callback runs.
+    flushSync(() => {
+      setDictating(false);
+      setInterim('');
+      setStatus('听写已停止，已识别的文字已保留，可以继续编辑。');
+    });
+    stop?.();
+  }, []);
+  const startDictation = () => {
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: SpeechConstructor;
+      webkitSpeechRecognition?: SpeechConstructor;
+    };
+    const Constructor =
+      speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+    if (!Constructor) {
+      setStatus('此浏览器不支持实时听写，请输入或粘贴文字，或使用录音转写。');
+      return;
+    }
+    try {
+      setDictating(true);
+      setStatus('正在听写；已识别文字自动追加，离开此工具会停止。');
+      stopDictation.current = beginDictation(Constructor, {
+        onFinal: (text) =>
+          setData((d) => ({
+            ...d,
+            note: {
+              ...d.note,
+              transcript: (
+                d.note.transcript +
+                (d.note.transcript ? '\n' : '') +
+                text
+              ).slice(0, 50000),
+            },
+          })),
+        onInterim: setInterim,
+        onEnd: (message) => {
+          setDictating(false);
+          setStatus(message);
+        },
+      });
+    } catch {
+      setDictating(false);
+      setStatus('听写无法启动，请输入文字或使用录音转写。');
+    }
+  };
   const transcribe = async (file: File | Blob) => {
     setBusy(true);
     setStatus('正在转写录音…');
@@ -378,6 +224,7 @@ function NotesTool({ active }: { active: boolean }) {
   };
   const stop = useCallback(() => {
     session.current++;
+    stopDictation.current?.();
     if (recorder.current?.state === 'recording') recorder.current.stop();
     stream.current?.getTracks().forEach((t) => t.stop());
     setRecording(false);
@@ -392,6 +239,7 @@ function NotesTool({ active }: { active: boolean }) {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      stopDictation.current?.();
       invalidateSession();
       stream.current?.getTracks().forEach((t) => t.stop());
       if (recorder.current?.state === 'recording') recorder.current.stop();
@@ -443,9 +291,15 @@ function NotesTool({ active }: { active: boolean }) {
   };
   const summarize = async () => {
     if (!note.transcript.trim()) return;
+    if (showcase) {
+      patch(localNoteSummary(note.transcript));
+      setStatus('本地速记 · 已提取原文中的摘要与待办，未调用 AI。');
+      return;
+    }
     setBusy(true);
     try {
       const response = await fetch('/api/ai/summary', {
+        signal: AbortSignal.timeout(20000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -484,10 +338,7 @@ function NotesTool({ active }: { active: boolean }) {
   };
   return (
     <>
-      <PageTitle
-        title="把重要的事记下来"
-        description="听课、开会，或者记录一个刚刚冒出的想法。"
-      />
+      <PageTitle title="纪要" />
       <div className="notes-columns">
         <section className="paper-panel">
           <label>
@@ -513,24 +364,31 @@ function NotesTool({ active }: { active: boolean }) {
               className={
                 recording ? 'secondary-button danger' : 'secondary-button'
               }
-              disabled={busy}
+              disabled={busy || dictating}
               onClick={() => (recording ? stop() : void start())}
             >
               {recording ? <Square size={16} /> : <Mic size={16} />}{' '}
               {recording ? '停止录音' : '开始录音'}
             </button>
+            <button
+              className="secondary-button"
+              disabled={busy || recording}
+              onClick={() => (dictating ? endDictation() : startDictation())}
+            >
+              {dictating ? '停止听写' : '实时听写'}
+            </button>
             <label className="text-button upload-label">
               <Upload size={16} />
               上传录音
               <input
-                disabled={busy || recording}
+                disabled={busy || recording || dictating}
                 type="file"
                 accept="audio/*"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
-                    if (file.size > 25 * 1024 * 1024)
-                      notify('录音请控制在 25 MB 以内。');
+                    if (file.size > 20 * 1024 * 1024)
+                      notify('录音请控制在 20 MB 以内。');
                     else void transcribe(file);
                   }
                   e.target.value = '';
@@ -538,6 +396,14 @@ function NotesTool({ active }: { active: boolean }) {
               />
             </label>
           </div>
+          <p className="muted">
+            实时听写由浏览器提供，可能使用浏览器厂商的在线语音服务；只在点击后开启。也可直接输入文字。
+          </p>
+          {interim && (
+            <p className="inline-message" aria-live="polite">
+              正在识别：{interim}
+            </p>
+          )}
           {audioUrl && (
             <div className="recorded-audio">
               <audio controls src={audioUrl}>
@@ -552,7 +418,7 @@ function NotesTool({ active }: { active: boolean }) {
               </a>
               <button
                 className="secondary-button"
-                disabled={busy || recording}
+                disabled={busy || recording || dictating}
                 onClick={() =>
                   void fetch(audioUrl)
                     .then((r) => r.blob())
@@ -570,7 +436,7 @@ function NotesTool({ active }: { active: boolean }) {
           )}
           <button
             className="primary-button full-width"
-            disabled={busy || recording || !note.transcript.trim()}
+            disabled={busy || recording || dictating || !note.transcript.trim()}
             onClick={() => void summarize()}
           >
             <FileText size={17} />
@@ -696,7 +562,6 @@ function GestureTool({ active }: { active: boolean }) {
           {cameraStatus !== 'active' && (
             <div className="camera-empty">
               <Hand size={48} />
-              <p>用一个小手势，开始今天的陪伴</p>
             </div>
           )}
           <div className="camera-controls">
@@ -743,7 +608,7 @@ function GestureTool({ active }: { active: boolean }) {
   );
 }
 function FocusTool() {
-  const { data, setData, startFocus } = useStudy();
+  const { data, setData, startFocus, showcase } = useStudy();
   const [minutes, setMinutes] = useState(data.settings.focusMinutes);
   const buddy =
     data.buddies.find(
@@ -751,10 +616,7 @@ function FocusTool() {
     ) ?? data.buddies[0];
   return (
     <>
-      <PageTitle
-        title="这段时间，只做一件事"
-        description="不用一次走很远。把眼前的一小步，交给现在。"
-      />
+      <PageTitle title="番茄钟" />
       <div className="focus-workspace">
         <section className="focus-main">
           <BuddyStage
@@ -764,7 +626,7 @@ function FocusTool() {
           <h2>{buddy.name} 陪你专注</h2>
           <FocusControls />
           <div className="button-row centered focus-presets">
-            {[10, 25, 45].map((m) => (
+            {(showcase ? [1, 10, 25] : [10, 25, 45]).map((m) => (
               <button
                 className={
                   'secondary-button ' + (minutes === m ? 'selected' : '')
@@ -828,6 +690,21 @@ function FocusTool() {
                   const sessionId = data.focus?.id;
                   setData((d) => ({
                     ...d,
+                    ...(feedback === 'tired' ||
+                    feedback === 'steady' ||
+                    feedback === 'ready'
+                      ? {
+                          studyProfile: {
+                            energy:
+                              feedback === 'tired'
+                                ? 1
+                                : feedback === 'steady'
+                                  ? 3
+                                  : 5,
+                            updatedAt: new Date().toISOString(),
+                          },
+                        }
+                      : {}),
                     focusHistory: d.focusHistory.map((record) =>
                       record.id === sessionId
                         ? { ...record, feedback }
@@ -838,6 +715,7 @@ function FocusTool() {
               >
                 <option value="">记录一下这次的感受</option>
                 <option value="steady">状态不错，节奏刚好</option>
+                <option value="ready">精力充足，还想继续</option>
                 <option value="tired">有些累了，需要休息</option>
                 <option value="distracted">容易分心，下次缩短一点</option>
               </select>
@@ -851,7 +729,7 @@ function FocusTool() {
         </section>
         <aside className="paper-panel focus-history">
           <h2>认真过的时光</h2>
-          <p className="muted">每一小步，都算数。</p>
+
           {data.focusHistory.length ? (
             data.focusHistory
               .slice(-12)
