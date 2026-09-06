@@ -196,13 +196,21 @@ function NotesTool({ active }: { active: boolean }) {
       form.set(
         'audio',
         file,
-        file instanceof File ? file.name : 'recording.webm',
+        file instanceof File
+          ? file.name
+          : `recording.${file.type.includes('mp4') ? 'm4a' : file.type.includes('ogg') ? 'ogg' : file.type.includes('wav') ? 'wav' : 'webm'}`,
       );
       const response = await fetch('/api/ai/transcribe', {
         method: 'POST',
         body: form,
         signal: AbortSignal.timeout(190000),
       });
+      if (!response.headers.get('content-type')?.includes('application/json'))
+        throw new Error(
+          response.status === 413
+            ? '录音超出当前服务器上传限制，请缩短后再试。'
+            : '转写服务暂时未响应，请稍后重试；录音仍可下载。',
+        );
       const result = (await response.json()) as ApiResult;
       if (!response.ok || !result.transcript)
         throw new Error(result.error || '转写失败');

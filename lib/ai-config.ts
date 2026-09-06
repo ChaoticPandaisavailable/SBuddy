@@ -63,6 +63,6 @@ export function transcriptionConfig() {
       (moss
         ? process.env.MOSS_TRANSCRIBE_MODEL
         : process.env.OPENAI_TRANSCRIBE_MODEL
-      )?.trim() || (moss ? 'moss-transcribe-1.0' : 'gpt-transcribe'),
+      )?.trim() || (moss ? 'moss-transcribe-1.0' : 'gpt-4o-mini-transcribe'),
   };
 }

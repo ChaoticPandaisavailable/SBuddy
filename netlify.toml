@@ -1,0 +1,12 @@
+[build]
+  command = "npm run build:netlify"
+  publish = ".netlify/static"
+
+[build.environment]
+  NODE_VERSION = "22"
+  NEXT_PUBLIC_SITE_ORIGIN = "https://sbuddy-study.netlify.app"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

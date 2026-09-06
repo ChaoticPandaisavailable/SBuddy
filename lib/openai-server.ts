@@ -28,6 +28,7 @@ export class AIServiceError extends Error {
   constructor(
     public status: number,
     public provider: string,
+    public reason?: string,
   ) {
     // Do not surface upstream bodies: they can echo credentials or user material.
     super(provider + ' request failed (HTTP ' + status + ')');
@@ -53,8 +54,28 @@ async function responseJson(
   provider: string,
 ): Promise<JsonRecord> {
   if (!response.ok) {
-    await response.body?.cancel();
-    throw new AIServiceError(response.status, provider);
+    const failure = record(await response.json().catch(() => ({})));
+    const detail = record(failure.error);
+    const message =
+      typeof detail.message === 'string'
+        ? detail.message
+        : typeof failure.message === 'string'
+          ? failure.message
+          : '';
+    const reason = /model/i.test(message)
+      ? 'model'
+      : /response_format/i.test(message)
+        ? 'response_format'
+        : /prompt/i.test(message)
+          ? 'prompt'
+          : /language/i.test(message)
+            ? 'language'
+            : /file|audio|format/i.test(message)
+              ? 'audio'
+              : /balance|credit|quota/i.test(message)
+                ? 'quota'
+                : 'request';
+    throw new AIServiceError(response.status, provider, reason);
   }
   return record(await response.json());
 }

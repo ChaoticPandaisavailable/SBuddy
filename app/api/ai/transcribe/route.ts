@@ -2,6 +2,7 @@ import {
   isTranscriptionConfigured,
   transcribeAudio,
   aiServiceMessage,
+  AIServiceError,
 } from '@/lib/openai-server';
 
 export const runtime = 'edge';
@@ -37,9 +38,36 @@ export async function POST(request: Request): Promise<Response> {
     const transcript = await transcribeAudio(audio);
     return Response.json({ source: 'ai', transcript });
   } catch (error) {
+    const upstreamStatus =
+      error instanceof AIServiceError ? error.status : undefined;
+    const code = upstreamStatus
+      ? `upstream_${upstreamStatus}`
+      : error instanceof Error &&
+          ['TimeoutError', 'AbortError'].includes(error.name)
+        ? 'transcription_timeout'
+        : 'transcription_failed';
+    // Log only error categories, never upstream bodies, audio or credentials.
+    console.error('transcription_failed', {
+      code,
+      upstreamStatus,
+      provider: error instanceof AIServiceError ? error.provider : undefined,
+      kind: error instanceof Error ? error.name : 'UnknownError',
+    });
     return Response.json(
       {
-        error: aiServiceMessage(error, '录音转写失败，请检查网络或稍后重试。'),
+        code,
+        provider: error instanceof AIServiceError ? error.provider : undefined,
+        reason: error instanceof AIServiceError ? error.reason : undefined,
+        error: aiServiceMessage(
+          error,
+          upstreamStatus === 404
+            ? '语音服务地址或转写模型不可用，请检查转写配置。'
+            : upstreamStatus === 400 ||
+                upstreamStatus === 415 ||
+                upstreamStatus === 422
+              ? '语音服务未接受当前音频或模型参数，请尝试 WAV、MP3 文件并检查转写配置。'
+              : '录音转写失败，请检查网络或稍后重试。',
+        ),
       },
       { status: 502 },
     );
