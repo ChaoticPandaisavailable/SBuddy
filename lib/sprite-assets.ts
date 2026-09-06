@@ -1,3 +1,4 @@
+import { loadPortraitFrame } from './portrait-image';
 import type { RigAppearance } from './companion-rig';
 import { readAsset } from './sbuddy-storage';
 
@@ -72,6 +73,7 @@ export async function loadSpriteFrames(
           ? await readAsset(appearance.atlasKey!)
           : `/characters/${appearance.preset}-sprite-v3.png`;
         if (!url) throw new Error('人物序列帧缺失，请恢复包含素材的备份。');
+        if (appearance.rigVersion === 4) return [await loadPortraitFrame(url)];
         const im = await spriteImage(url),
           female = appearance.preset === 'female';
         // Default sheets use reviewed, authored frame rectangles. Uploaded V3 uses the fixed grid contract.

@@ -3686,3 +3686,26 @@ progress::-webkit-progress-value {
 }
 .animation-matte { display:flex; align-items:center; gap:12px; margin:16px 0; }
 .animation-matte select { padding:7px 12px; border:1px solid #b9c5b0; border-radius:8px; }
+
+.portrait-preview { display:grid; place-items:center; margin:16px 0; padding:16px; border:1px solid var(--border); border-radius:16px; background:#e8e9e0; }
+.portrait-preview img { display:block; max-height:42dvh; max-width:100%; object-fit:contain; image-rendering:pixelated; }
+.portrait-mode-label { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); white-space:nowrap; padding:5px 10px; border-radius:20px; background:#fffaf1e8; color:#52644c; font-size:12px; pointer-events:none; }
+
+.game-gestures { position:relative; }
+.game-gesture-panel { position:absolute; top:calc(100% + 12px); right:0; width:min(300px,calc(100vw - 44px)); max-height:65dvh; overflow:auto; padding:16px; border:1px solid #cbd5bd; border-radius:14px; background:#fffdf4; color:#36432d; box-shadow:0 12px 32px #26302126; text-align:left; }
+.game-gesture-panel[hidden] { display:none; }
+.game-gesture-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.game-gesture-panel video { display:block; width:100%; aspect-ratio:4/3; object-fit:cover; transform:scaleX(-1); margin:10px 0; border-radius:8px; background:#e9ebdf; }
+.game-gesture-panel p,.game-gesture-panel li { font-size:12px; line-height:1.65; }
+.game-gesture-panel ul { list-style:none; padding:0; margin:12px 0; }
+.game-gesture-panel .primary-button { width:100%; min-height:38px; font-size:12px; }
+.game-gesture-panel .game-gesture-feedback { color:#45642c; font-weight:600; }
+.game-gesture-panel .game-gesture-feedback:empty { display:none; }
+.game-room .game-status .game-gesture-panel small { display:block; font-size:11px; line-height:1.5; color:#727965; }
+.game-room .game-top:has(.game-gesture-panel:not([hidden])) { z-index:50; }
+@media(max-width:760px) {
+ .game-room .game-top > .game-status { max-width:132px; }
+ .game-gesture-panel { top:calc(100% + 8px); }
+ .game-room .game-gestures .immersion-toggle { font-size:11px; padding:5px; }
+}
+.game-gesture-panel output { display:block; margin:10px 0; font-size:12px; line-height:1.65; }

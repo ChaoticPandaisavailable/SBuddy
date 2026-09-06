@@ -201,6 +201,7 @@ function NotesTool({ active }: { active: boolean }) {
       const response = await fetch('/api/ai/transcribe', {
         method: 'POST',
         body: form,
+        signal: AbortSignal.timeout(190000),
       });
       const result = (await response.json()) as ApiResult;
       if (!response.ok || !result.transcript)
@@ -299,7 +300,7 @@ function NotesTool({ active }: { active: boolean }) {
     setBusy(true);
     try {
       const response = await fetch('/api/ai/summary', {
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(70000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

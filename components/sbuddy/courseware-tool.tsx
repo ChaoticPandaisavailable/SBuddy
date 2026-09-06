@@ -42,7 +42,7 @@ export function CoursewareTool() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, material }),
-        signal: AbortSignal.timeout(60000),
+        signal: AbortSignal.timeout(70000),
       });
       const body = (await response.json()) as {
         error?: string;

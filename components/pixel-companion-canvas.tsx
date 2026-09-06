@@ -67,7 +67,11 @@ function loadImage(url: string) {
 }
 export function PixelCompanionCanvas(props: Props) {
   const appearance = props.appearance ?? DEFAULT;
-  if (!appearance.atlasKey || appearance.rigVersion === 3)
+  if (
+    !appearance.atlasKey ||
+    appearance.rigVersion === 3 ||
+    appearance.rigVersion === 4
+  )
     return <SpriteCompanionCanvas {...props} appearance={appearance} />;
   if (appearance.atlasKey && appearance.rigVersion !== 2 && !props.fullRoom)
     return <LegacyCanvas {...props} appearance={appearance} />;

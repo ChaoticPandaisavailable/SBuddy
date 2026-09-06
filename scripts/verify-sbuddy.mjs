@@ -989,7 +989,7 @@ try {
           throw new Error('Simulated unavailable service');
         if (
           url instanceof URL &&
-          url.pathname === '/characters/female-sprite-v3.png'
+          url.pathname === '/characters/male-sprite-v3.png'
         )
           return new Response(new Uint8Array([137, 80, 78, 71]), {
             headers: { 'content-type': 'image/png' },

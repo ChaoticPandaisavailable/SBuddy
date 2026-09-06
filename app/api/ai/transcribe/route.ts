@@ -1,11 +1,15 @@
-import { isOpenAIConfigured, transcribeAudio } from '@/lib/openai-server';
+import {
+  isTranscriptionConfigured,
+  transcribeAudio,
+  aiServiceMessage,
+} from '@/lib/openai-server';
 
 export const runtime = 'edge';
 
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 
 export async function POST(request: Request): Promise<Response> {
-  if (!isOpenAIConfigured()) {
+  if (!isTranscriptionConfigured()) {
     return Response.json(
       { error: '尚未配置 AI 语音转写密钥。可以粘贴文字稿，继续整理纪要。' },
       { status: 503 },
@@ -32,9 +36,11 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const transcript = await transcribeAudio(audio);
     return Response.json({ source: 'ai', transcript });
-  } catch {
+  } catch (error) {
     return Response.json(
-      { error: '录音转写失败，请检查网络或稍后重试。' },
+      {
+        error: aiServiceMessage(error, '录音转写失败，请检查网络或稍后重试。'),
+      },
       { status: 502 },
     );
   }
