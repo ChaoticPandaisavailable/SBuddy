@@ -151,7 +151,7 @@ function walk(r: SpriteRuntime, entering: boolean, at: number) {
       to = Math.min(distance, (i + 1) * stride);
     steps.push({
       frame: r.preset ? AUTHORED_WALK[i % AUTHORED_WALK.length] : 42 + (i % 6),
-      duration: r.preset ? 27.5 : 110,
+      duration: (to - from) * 20,
       from: entering ? distance - from : from,
       to: entering ? distance - to : to,
       flip: entering,
@@ -192,7 +192,7 @@ function finish(r: SpriteRuntime, at: number) {
       r.current !== r.desired &&
       !(r.current === 'idle' && r.desired === 'returning')
     ) {
-      begin(r, 'join', [{ frame: 0, duration: 180 }], at);
+      begin(r, 'join', [{ frame: r.preset ? 48 : 0, duration: 180 }], at);
     } else begin(r, 'loop', stepsFor(r.current, r.preset), at);
   }
 }
@@ -221,8 +221,21 @@ export function sampleSprite(r: SpriteRuntime, now: number) {
     !(r.current === 'idle' && r.desired === 'returning') &&
     now - r.at >= Math.min(r.steps[r.index].duration, 200)
   ) {
-    const closing =
-      r.current === 'study' || r.current === 'class'
+    const closing = r.preset
+      ? r.current === 'study'
+        ? [58, 59, 48]
+        : r.current === 'class'
+          ? [83, 48]
+          : r.current === 'tired'
+            ? [94, 95, 48]
+            : r.current === 'greet'
+              ? [65, 48]
+              : r.current === 'think'
+                ? [70, 71, 48]
+                : r.current === 'cheer'
+                  ? [76, 77, 48]
+                  : [48]
+      : r.current === 'study' || r.current === 'class'
         ? [10, 11, 0]
         : r.current === 'tired'
           ? [32, 31, 0]

@@ -1,3 +1,4 @@
+import { cleanSpriteEdges } from './sprite-edge-cleanup';
 // Reviewed rectangles for the new pose sheets. Generated sheets are not assumed
 // to have a perfect grid; row bounds keep every hand and foot inside its cell.
 export function extractExtraPoses(
@@ -67,6 +68,7 @@ export function extractExtraPoses(
       if (y > 0) add(i - cell.width);
       if (y + 1 < cell.height) add(i + cell.width);
     }
+    cleanSpriteEdges(pixels);
     let top = cell.height,
       bottom = 0;
     for (let y = 0; y < cell.height; y++)

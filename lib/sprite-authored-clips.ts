@@ -7,18 +7,19 @@ export const EXTRA_POSE_COUNT = 60;
 const pose = (row: number, col: number) => 48 + row * 6 + col;
 const row = (index: number) =>
   Array.from({ length: 6 }, (_, col) => pose(index, col));
-const stand = [36, ...row(8), 39, 40, 41];
+// Bundled playback uses the new pose set exclusively.
+const stand = row(8);
 const paths: Record<AnimationState, number[]> = {
-  idle: [0, 48, 49, 1, 50, 2, 51, 3, 52, 4, 53, 0],
-  study: [0, 54, 6, 55, 7, 56, 8, 57, 9, 56, 8, 57, 9, 58, 10, 59, 11, 0],
-  greet: [0, 60, 61, 62, 63, 64, 63, 64, 62, 61, 65, 0],
-  think: [0, 66, 67, 19, 68, 20, 69, 21, 20, 70, 71, 22, 0],
-  cheer: [0, 72, 25, 73, 26, 74, 27, 75, 27, 76, 28, 77, 0],
-  class: [0, ...row(5), 0],
-  meeting: [0, 84, 85, 86, 85, 86, 87, 88, 89, 84, 0],
-  tired: [31, 90, 91, 32, 92, 33, 93, 34, 94, 33, 95, 32, 31],
+  idle: row(0),
+  study: [48, ...row(1), 48],
+  greet: [48, 60, 61, 62, 63, 64, 65, 48],
+  think: [48, ...row(3), 48],
+  cheer: [48, ...row(4), 48],
+  class: [48, ...row(5), 48],
+  meeting: [48, ...row(6), 48],
+  tired: [48, ...row(7), 48],
   away: stand,
-  returning: [...stand].reverse().concat(0),
+  returning: [...stand].reverse().concat(48),
 };
 
 // Allocate held frame slots to key poses without changing their timing. Every
@@ -49,9 +50,12 @@ export function authoredClip(state: AnimationState, duration: number) {
   );
 }
 
-export const AUTHORED_WALK = [
-  42, 102, 43, 103, 44, 104, 45, 105, 46, 106, 47, 107,
-].flatMap((frame) => [frame, frame]);
+export const AUTHORED_WALK = row(9).flatMap((frame) => [
+  frame,
+  frame,
+  frame,
+  frame,
+]);
 
 export function authoredRise(frame: number) {
   if (frame >= 102) return 32;

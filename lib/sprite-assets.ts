@@ -1,3 +1,4 @@
+import { cleanSpriteEdges } from './sprite-edge-cleanup';
 import { extractExtraPoses } from './sprite-extra-assets';
 import { loadPortraitFrame } from './portrait-image';
 import type { RigAppearance } from './companion-rig';
@@ -126,6 +127,7 @@ export async function loadSpriteFrames(
                 bottom = Math.max(bottom, y);
               }
             }
+          if (!custom) cleanSpriteEdges(pixels);
           ctx.putImageData(pixels, 0, 0);
           const output = document.createElement('canvas');
           output.width = 256;
