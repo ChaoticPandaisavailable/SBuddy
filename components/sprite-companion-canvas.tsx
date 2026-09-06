@@ -4,6 +4,7 @@ import type { CompanionCanvasProps } from './pixel-companion-canvas';
 import { ANIMATION_CLIPS } from '@/lib/companion-animation';
 import { createSpriteRuntime, sampleSprite } from '@/lib/sprite-animation';
 import { loadSpriteFrames, spriteImage } from '@/lib/sprite-assets';
+import { interpolatedSpriteFrame, spriteRise } from '@/lib/sprite-interpolation';
 import { cover } from '@/lib/chibi-renderer';
 import { DESK_OBJECTS } from '@/lib/companion-behavior';
 import { cn } from '@/lib/utils';
@@ -41,7 +42,10 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
       token = input.current.actionToken ?? 0;
     let room = input.current.room ?? 'library',
       switching = false;
-    const r = createSpriteRuntime(performance.now());
+    const r = createSpriteRuntime(
+      performance.now(),
+      !atlasKey && !portrait ? preset : undefined,
+    );
     const resize = () => {
       const b = el.getBoundingClientRect();
       c.height = 480;
@@ -192,13 +196,12 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
           const body = () => {
             if (!pose.visible) return;
             ctx.save();
+            const inBetween = !atlasKey && !portrait && !reduced && p.previewFrame === undefined
+              ? sampled.tweenTo : undefined;
             const rise = portrait
               ? 0
-              : pose.frame >= 39
-                ? 32
-                : pose.frame === 38
-                  ? 16
-                  : 0;
+              : inBetween === undefined ? spriteRise(pose.frame)
+                : (spriteRise(pose.frame) + spriteRise(inBetween)) / 2;
             // Enlarge around the writing contact, so the hands stay on the same desktop.
             ctx.translate(
               Math.round(pose.x * characterScale),
@@ -214,7 +217,11 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
               r.current === 'idle'
                 ? 39
                 : pose.frame;
-            ctx.drawImage(frames[portrait ? 0 : shownFrame], -128, 0);
+            ctx.drawImage(
+              interpolatedSpriteFrame(frames, portrait ? 0 : shownFrame,
+                shownFrame === pose.frame ? inBetween : undefined),
+              -128, 0,
+            );
             ctx.restore();
           };
           body();

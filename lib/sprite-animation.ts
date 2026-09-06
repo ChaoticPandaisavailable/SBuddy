@@ -72,18 +72,49 @@ export function validateSpriteManifest(value: unknown): SpriteManifest {
     throw new Error('序列帧动作定义不完整或不兼容，原人物已保留。');
   return structuredClone(SPRITE_MANIFEST);
 }
-type Step = {
+export type SpriteStep = {
+  tweenTo?: number;
   frame: number;
   duration: number;
   from?: number;
   to?: number;
   flip?: boolean;
 };
+// One equal-weight in-between for every original step. Limit its hold so long
+// idle pauses remain crisp. Splitting travel by elapsed time preserves speed.
+export function interpolateSpriteSteps(
+  steps: SpriteStep[],
+  loop = false,
+): SpriteStep[] {
+  return steps.flatMap((step, i) => {
+    const next = steps[i + 1] ?? (loop ? steps[0] : step);
+    const blendDuration = Math.min(70, step.duration / 2);
+    const holdDuration = step.duration - blendDuration;
+    const splitX =
+      step.from !== undefined && step.to !== undefined
+        ? step.from + ((step.to - step.from) * holdDuration) / step.duration
+        : undefined;
+    return [
+      {
+        ...step,
+        duration: holdDuration,
+        ...(splitX === undefined ? {} : { to: splitX }),
+      },
+      {
+        ...step,
+        tweenTo: next.frame,
+        duration: blendDuration,
+        ...(splitX === undefined ? {} : { from: splitX }),
+      },
+    ];
+  });
+}
 export type SpriteRuntime = {
+  preset?: 'female' | 'male';
   current: AnimationState;
   desired: AnimationState;
   phase: 'loop' | 'join' | 'exit' | 'walk-out' | 'away' | 'walk-in' | 'sit';
-  steps: Step[];
+  steps: SpriteStep[];
   at: number;
   index: number;
   x: number;
@@ -95,16 +126,22 @@ export type SpriteRuntime = {
   exitX: number;
   lastCompletedAction?: AnimationState;
 };
-const stepsFor = (state: AnimationState): Step[] => {
+const stepsFor = (state: AnimationState): SpriteStep[] => {
   const c = SPRITE_MANIFEST.clips[state];
   return c.frames.map((frame, i) => ({ frame, duration: c.durations[i] }));
 };
-export function createSpriteRuntime(now = 0): SpriteRuntime {
+export function createSpriteRuntime(
+  now = 0,
+  preset?: SpriteRuntime['preset'],
+): SpriteRuntime {
   return {
+    preset,
     current: 'idle',
     desired: 'idle',
     phase: 'loop',
-    steps: stepsFor('idle'),
+    steps: preset
+      ? interpolateSpriteSteps(stepsFor('idle'), true)
+      : stepsFor('idle'),
     at: now,
     index: 0,
     x: 0,
@@ -119,18 +156,23 @@ export function createSpriteRuntime(now = 0): SpriteRuntime {
 function begin(
   r: SpriteRuntime,
   phase: SpriteRuntime['phase'],
-  steps: Step[],
+  steps: SpriteStep[],
   at: number,
 ) {
   r.phase = phase;
-  r.steps = steps;
+  r.steps = r.preset
+    ? interpolateSpriteSteps(
+        steps,
+        phase === 'loop' && SPRITE_MANIFEST.clips[r.current].loop,
+      )
+    : steps;
   r.index = 0;
   r.at = at;
 }
 function walk(r: SpriteRuntime, entering: boolean, at: number) {
   const distance = r.exitX,
     count = Math.ceil(distance / 9),
-    steps: Step[] = [];
+    steps: SpriteStep[] = [];
   for (let i = 0; i < count; i++) {
     const from = Math.min(distance, i * 9),
       to = Math.min(distance, (i + 1) * 9);
@@ -245,6 +287,7 @@ export function sampleSprite(r: SpriteRuntime, now: number) {
   else r.x = 0;
   return {
     frame: r.frame,
+    tweenTo: step.tweenTo,
     x: r.x,
     flip: r.flip,
     visible: true,
