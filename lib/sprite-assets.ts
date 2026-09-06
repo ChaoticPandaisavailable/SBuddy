@@ -1,3 +1,4 @@
+import { extractExtraPoses } from './sprite-extra-assets';
 import { loadPortraitFrame } from './portrait-image';
 import type { RigAppearance } from './companion-rig';
 import { readAsset } from './sbuddy-storage';
@@ -83,7 +84,7 @@ export async function loadSpriteFrames(
         const ys = female
           ? [0, 185, 370, 555, 740, 925, 1070, 1265, 1448]
           : [0, 155, 308, 458, 608, 758, 908, 1085, 1295];
-        return Array.from({ length: 48 }, (_, i) => {
+        const originals = Array.from({ length: 48 }, (_, i) => {
           const row = Math.floor(i / 6),
             col = i % 6;
           const x0 = custom ? (col * im.width) / 6 : xs[col],
@@ -173,6 +174,13 @@ export async function loadSpriteFrames(
           }
           return output;
         });
+        if (custom) return originals;
+        const extra = await spriteImage(
+          '/characters/' + appearance.preset + '-inbetweens-v1.png',
+        );
+        return originals.concat(
+          extractExtraPoses(extra, appearance.preset, originals),
+        );
       })().catch((error) => {
         loaded.delete(key);
         throw error;

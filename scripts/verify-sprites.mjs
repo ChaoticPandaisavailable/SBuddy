@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 export async function verifySprites(server, check, state) {
   const sprite = await server.ssrLoadModule('/lib/sprite-animation.ts');
   const states = Object.keys(sprite.SPRITE_MANIFEST.clips);
+  const authored = await server.ssrLoadModule('/lib/sprite-authored-clips.ts');
   const layout = await server.ssrLoadModule('/lib/desk-object-layout.ts');
   check(
     'desk entry objects stay on either side, in bounds and separately clickable',
@@ -64,41 +65,30 @@ export async function verifySprites(server, check, state) {
     },
   );
   check(
-    'all preset activities receive one in-between per step without changing order or duration',
+    'authored actions have 24 crisp slots and retain their duration',
     () => {
-      for (const clip of Object.values(sprite.SPRITE_MANIFEST.clips)) {
-        const original = clip.frames.map((frame, i) => ({
-          frame,
-          duration: clip.durations[i],
-        }));
-        const steps = sprite.interpolateSpriteSteps(original, clip.loop);
-        assert.equal(steps.length, original.length * 2);
-        assert.equal(
-          steps.reduce((n, s) => n + s.duration, 0),
-          clip.durations.reduce((a, b) => a + b, 0),
+      for (const [name, clip] of Object.entries(sprite.SPRITE_MANIFEST.clips)) {
+        const duration = clip.durations.reduce((a, b) => a + b, 0);
+        const steps = authored.authoredClip(name, duration);
+        assert.equal(steps.length, 24);
+        assert.ok(
+          Math.abs(steps.reduce((n, s) => n + s.duration, 0) - duration) <
+            0.00001,
         );
-        original.forEach((step, i) => {
-          assert.equal(steps[i * 2].frame, step.frame);
-          assert.equal(steps[i * 2 + 1].frame, step.frame);
-          assert.equal(
-            steps[i * 2 + 1].tweenTo,
-            original[i + 1]?.frame ??
-              (clip.loop ? original[0].frame : step.frame),
-          );
-          assert.ok(steps[i * 2 + 1].duration <= 70);
-        });
+        assert.ok(
+          steps.every(
+            (s) =>
+              s.duration > 0 &&
+              s.frame >= 0 &&
+              s.frame < 108 &&
+              !('tweenTo' in s),
+          ),
+        );
+        assert.ok(steps.some((s) => s.frame >= 48));
       }
-      const legacy = sprite.createSpriteRuntime();
-      assert.deepEqual(
-        legacy.steps.map((s) => s.frame),
-        sprite.SPRITE_MANIFEST.clips.idle.frames,
-      );
+      assert.equal(authored.AUTHORED_WALK.length, 24);
       for (const preset of ['female', 'male']) {
-        const r = sprite.createSpriteRuntime(0, preset);
-        assert.equal(
-          r.steps.length,
-          sprite.SPRITE_MANIFEST.clips.idle.frames.length * 2,
-        );
+        assert.equal(sprite.createSpriteRuntime(0, preset).steps.length, 24);
         for (const activity of ['greet', 'cheer']) {
           const r = sprite.createSpriteRuntime(0, preset);
           r.desired = activity;
@@ -110,46 +100,27 @@ export async function verifySprites(server, check, state) {
       }
     },
   );
-  check(
-    'uniform in-betweens preserve walking velocity and retarget safely',
-    () => {
-      const input = [
-        { frame: 42, duration: 110, from: 0, to: 9, flip: false },
-        { frame: 43, duration: 110, from: 9, to: 18, flip: false },
-      ];
-      const steps = sprite.interpolateSpriteSteps(input);
-      for (const step of steps)
-        assert.ok(
-          Math.abs((step.to - step.from) / step.duration - 9 / 110) < 1e-10,
-        );
-      assert.equal(steps[0].to, steps[1].from);
-      assert.equal(steps[1].to, 9);
-      assert.equal(steps.at(-1).to, 18);
-      for (const preset of ['female', 'male']) {
-        for (const from of states)
-          for (const target of states) {
-            const r = sprite.createSpriteRuntime(0, preset);
-            r.desired = from;
-            let x = 0;
-            for (let t = 0; t < 40000; t += 20) {
-              if (t >= 16000) r.desired = target;
-              const p = sprite.sampleSprite(r, t);
-              assert.ok(Math.abs(p.x - x) < 10);
-              x = p.x;
-              assert.ok(p.frame >= 0 && p.frame < 48);
-              if (p.tweenTo !== undefined)
-                assert.ok(p.tweenTo >= 0 && p.tweenTo < 48);
-            }
-            assert.equal(
-              r.current,
-              ['greet', 'cheer', 'returning'].includes(target)
-                ? 'idle'
-                : target,
-            );
+  check('authored walking preserves velocity and retargets safely', () => {
+    for (const preset of ['female', 'male']) {
+      for (const from of states)
+        for (const target of states) {
+          const r = sprite.createSpriteRuntime(0, preset);
+          r.desired = from;
+          let x = 0;
+          for (let t = 0; t < 40000; t += 20) {
+            if (t >= 16000) r.desired = target;
+            const p = sprite.sampleSprite(r, t);
+            assert.ok(Math.abs(p.x - x) < 10);
+            x = p.x;
+            assert.ok(p.frame >= 0 && p.frame < (r.preset ? 108 : 48));
           }
-      }
-    },
-  );
+          assert.equal(
+            r.current,
+            ['greet', 'cheer', 'returning'].includes(target) ? 'idle' : target,
+          );
+        }
+    }
+  });
   check(
     'sprite manifests cover all activities with bounded positive frame durations',
     () => {
@@ -230,7 +201,7 @@ export async function verifySprites(server, check, state) {
         r.desired =
           t < 1800 ? states[Math.floor(t / 120) % states.length] : 'class';
         const p = sprite.sampleSprite(r, t);
-        assert.ok(p.frame >= 0 && p.frame < 48);
+        assert.ok(p.frame >= 0 && p.frame < (r.preset ? 108 : 48));
       }
       assert.equal(r.current, 'class');
       assert.equal(r.phase, 'loop');

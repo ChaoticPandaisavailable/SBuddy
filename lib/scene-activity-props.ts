@@ -22,11 +22,12 @@ export function sampleDeskActivity(
     book: classroom ? presence : 0,
     laptop: meeting ? presence : 0,
     page: closing ? 0 : page,
-    frame: classroom
-      ? closing || elapsed < 3000 || elapsed >= 5070
-        ? 0
-        : 19
-      : undefined,
+    frame:
+      classroom && !r.preset
+        ? closing || elapsed < 3000 || elapsed >= 5070
+          ? 0
+          : 19
+        : undefined,
   };
 }
 

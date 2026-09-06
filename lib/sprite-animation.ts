@@ -1,3 +1,4 @@
+import { authoredClip, AUTHORED_WALK } from './sprite-authored-clips';
 import type { AnimationState } from './companion-animation';
 
 export type SpriteManifest = {
@@ -73,42 +74,12 @@ export function validateSpriteManifest(value: unknown): SpriteManifest {
   return structuredClone(SPRITE_MANIFEST);
 }
 export type SpriteStep = {
-  tweenTo?: number;
   frame: number;
   duration: number;
   from?: number;
   to?: number;
   flip?: boolean;
 };
-// One equal-weight in-between for every original step. Limit its hold so long
-// idle pauses remain crisp. Splitting travel by elapsed time preserves speed.
-export function interpolateSpriteSteps(
-  steps: SpriteStep[],
-  loop = false,
-): SpriteStep[] {
-  return steps.flatMap((step, i) => {
-    const next = steps[i + 1] ?? (loop ? steps[0] : step);
-    const blendDuration = Math.min(70, step.duration / 2);
-    const holdDuration = step.duration - blendDuration;
-    const splitX =
-      step.from !== undefined && step.to !== undefined
-        ? step.from + ((step.to - step.from) * holdDuration) / step.duration
-        : undefined;
-    return [
-      {
-        ...step,
-        duration: holdDuration,
-        ...(splitX === undefined ? {} : { to: splitX }),
-      },
-      {
-        ...step,
-        tweenTo: next.frame,
-        duration: blendDuration,
-        ...(splitX === undefined ? {} : { from: splitX }),
-      },
-    ];
-  });
-}
 export type SpriteRuntime = {
   preset?: 'female' | 'male';
   current: AnimationState;
@@ -126,8 +97,16 @@ export type SpriteRuntime = {
   exitX: number;
   lastCompletedAction?: AnimationState;
 };
-const stepsFor = (state: AnimationState): SpriteStep[] => {
+const stepsFor = (
+  state: AnimationState,
+  preset?: SpriteRuntime['preset'],
+): SpriteStep[] => {
   const c = SPRITE_MANIFEST.clips[state];
+  if (preset)
+    return authoredClip(
+      state,
+      c.durations.reduce((a, b) => a + b, 0),
+    );
   return c.frames.map((frame, i) => ({ frame, duration: c.durations[i] }));
 };
 export function createSpriteRuntime(
@@ -139,9 +118,7 @@ export function createSpriteRuntime(
     current: 'idle',
     desired: 'idle',
     phase: 'loop',
-    steps: preset
-      ? interpolateSpriteSteps(stepsFor('idle'), true)
-      : stepsFor('idle'),
+    steps: stepsFor('idle', preset),
     at: now,
     index: 0,
     x: 0,
@@ -160,25 +137,21 @@ function begin(
   at: number,
 ) {
   r.phase = phase;
-  r.steps = r.preset
-    ? interpolateSpriteSteps(
-        steps,
-        phase === 'loop' && SPRITE_MANIFEST.clips[r.current].loop,
-      )
-    : steps;
+  r.steps = steps;
   r.index = 0;
   r.at = at;
 }
 function walk(r: SpriteRuntime, entering: boolean, at: number) {
   const distance = r.exitX,
-    count = Math.ceil(distance / 9),
+    stride = r.preset ? 2.25 : 9,
+    count = Math.ceil(distance / stride),
     steps: SpriteStep[] = [];
   for (let i = 0; i < count; i++) {
-    const from = Math.min(distance, i * 9),
-      to = Math.min(distance, (i + 1) * 9);
+    const from = Math.min(distance, i * stride),
+      to = Math.min(distance, (i + 1) * stride);
     steps.push({
-      frame: 42 + (i % 6),
-      duration: 110,
+      frame: r.preset ? AUTHORED_WALK[i % AUTHORED_WALK.length] : 42 + (i % 6),
+      duration: r.preset ? 27.5 : 110,
       from: entering ? distance - from : from,
       to: entering ? distance - to : to,
       flip: entering,
@@ -189,10 +162,10 @@ function walk(r: SpriteRuntime, entering: boolean, at: number) {
 function reachTarget(r: SpriteRuntime, at: number) {
   if (r.desired === 'away') {
     r.current = 'away';
-    begin(r, 'exit', stepsFor('away'), at);
+    begin(r, 'exit', stepsFor('away', r.preset), at);
   } else {
     r.current = r.desired === 'returning' ? 'idle' : r.desired;
-    begin(r, 'loop', stepsFor(r.current), at);
+    begin(r, 'loop', stepsFor(r.current, r.preset), at);
   }
 }
 function finish(r: SpriteRuntime, at: number) {
@@ -202,7 +175,8 @@ function finish(r: SpriteRuntime, at: number) {
     r.x = r.exitX;
     return;
   }
-  if (r.phase === 'walk-in') return begin(r, 'sit', stepsFor('returning'), at);
+  if (r.phase === 'walk-in')
+    return begin(r, 'sit', stepsFor('returning', r.preset), at);
   if (r.phase === 'sit' || r.phase === 'join') return reachTarget(r, at);
   if (r.phase === 'loop') {
     if (
@@ -219,7 +193,7 @@ function finish(r: SpriteRuntime, at: number) {
       !(r.current === 'idle' && r.desired === 'returning')
     ) {
       begin(r, 'join', [{ frame: 0, duration: 180 }], at);
-    } else begin(r, 'loop', stepsFor(r.current), at);
+    } else begin(r, 'loop', stepsFor(r.current, r.preset), at);
   }
 }
 export function sampleSprite(r: SpriteRuntime, now: number) {
@@ -287,7 +261,7 @@ export function sampleSprite(r: SpriteRuntime, now: number) {
   else r.x = 0;
   return {
     frame: r.frame,
-    tweenTo: step.tweenTo,
+
     x: r.x,
     flip: r.flip,
     visible: true,
