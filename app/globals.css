@@ -3775,3 +3775,33 @@ progress::-webkit-progress-value {
  .game-room .game-gestures .immersion-toggle { font-size:11px; padding:5px; }
 }
 .game-gesture-panel output { display:block; margin:10px 0; font-size:12px; line-height:1.65; }
+
+.companion-invitation { position:absolute; z-index:22; bottom:28px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:6px; width:min(440px,calc(100% - 36px)); padding:10px 12px; border:1px solid #d1d5bb; border-radius:18px; background:#fffbedf2; box-shadow:0 6px 22px #2630211a; color:#445c43; }
+.companion-invitation > button:first-child { display:flex; align-items:center; gap:10px; flex:1; text-align:left; background:none; border:0; font-size:15px; line-height:1.6; }
+.companion-invitation svg { flex-shrink:0; }
+.game-room .companion-chat { text-align:left; background:#f5efddf5; padding:18px max(24px,calc((100% - 850px)/2)); }
+.companion-chat > header { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:20px; }
+.support-modes { display:flex; justify-content:center; flex-wrap:wrap; gap:8px; padding:0; margin:12px 0 4px; border:0; }
+.support-modes button { padding:9px 14px; border:1px solid #bdc8b0; border-radius:12px; background:#fffdf4; color:#4e634a; font-size:15px; }
+.game-room .support-modes button[aria-pressed=true] { color:#fffdf3; background:#536c50; }
+.support-remember { display:block; margin:0 auto 8px; font-size:12px; }
+.support-chat-log { max-height:min(30dvh,260px); overflow:auto; overscroll-behavior:contain; padding:4px 8px; }
+.support-message { white-space:pre-wrap; overflow-wrap:anywhere; padding:10px 14px; margin:8px 0; max-width:90%; border-radius:14px; background:#fffdf4; font-size:17px; line-height:1.75; }
+.support-message > span { display:block; color:#697660; font-size:12px; }
+.support-message.is-user { margin-left:auto; background:#e3ead8; }
+.support-welcome { text-align:center; padding:14px 0; color:#687460; font-size:18px; }
+.support-pending,.support-error { font-size:14px; color:#697660; }
+.support-error { display:flex; align-items:center; gap:8px; }
+.companion-chat form { display:flex; gap:10px; align-items:stretch; margin:12px 0 6px; }
+.companion-chat textarea { flex:1; min-width:0; resize:vertical; max-height:140px; padding:12px; font-size:16px; line-height:1.5; border:1px solid #bdc8b0; border-radius:12px; background:#fffdf5; }
+.game-room .companion-chat form .primary-button { background:#536c50; color:white; font-size:15px; }
+.companion-chat small { display:block; text-align:center; color:#737d68; font-size:12px; }
+@media(max-width:760px) {
+  .game-room .companion-chat { padding:14px 16px; }
+  .support-modes button { flex:1 1 30%; font-size:13px; padding:8px 5px; }
+  .support-chat-log { max-height:26dvh; }
+  .support-message { font-size:16px; max-width:96%; }
+  .companion-invitation { bottom:18px; }
+}
+
+.game-room dialog.companion-chat { position:static; width:100%; max-width:none; margin:0; color:inherit; }

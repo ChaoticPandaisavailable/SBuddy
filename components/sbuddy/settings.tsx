@@ -223,6 +223,21 @@ export function SettingsPage() {
           </div>
           <div className="setting-row">
             <div>
+              <strong>主动对话</strong>
+              <p>进入游戏或完成专注后，用小气泡邀请聊天；专注期间不打断。</p>
+            </div>
+            <input
+              aria-label="主动对话"
+              className="switch"
+              type="checkbox"
+              checked={data.settings.proactiveDialogue !== false}
+              onChange={(e) =>
+                settings({ proactiveDialogue: e.target.checked })
+              }
+            />
+          </div>
+          <div className="setting-row">
+            <div>
               <strong>减少动画</strong>
               <p>让角色保持静态，减少界面动效。</p>
             </div>

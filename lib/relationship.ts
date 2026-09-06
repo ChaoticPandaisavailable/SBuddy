@@ -28,6 +28,7 @@ export type DialoguePrompt = {
 };
 
 export type RelationshipPreferences = {
+  supportStyle?: string;
   reminderStyle?: string;
   taskApproach?: string;
   socialTone?: string;

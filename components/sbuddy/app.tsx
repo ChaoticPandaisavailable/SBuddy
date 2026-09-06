@@ -33,6 +33,7 @@ import { Tools } from './tools';
 import { ScheduleTool } from './schedule-tool';
 import { GameAgenda, GameTools } from './game-panels';
 import { GameGestures } from './game-gestures';
+import { CompanionChat } from './companion-chat';
 import {
   parseNavigation,
   type Page,
@@ -422,7 +423,9 @@ function Game({
   buddy: Buddy;
   navigate: (page: Page, tool?: Tool) => void;
 }) {
-  const { data, setData, notify, showcase } = useStudy();
+  const { data, setData, notify, showcase, recoveryVersion } = useStudy();
+  const [chatBuddyId, setChatBuddyId] = useState<string>();
+  const chatting = chatBuddyId === buddy.id;
   const [immersive, setImmersive] = useState(false);
   const [panel, setPanel] = useState<'focus' | 'notes'>();
   const [now, setNow] = useState(() => new Date());
@@ -464,7 +467,7 @@ function Game({
     schedule.todayEvents,
     modeToAnimation(schedule.mode),
     now,
-    !!active && !active.response,
+    chatting || (!!active && !active.response),
   );
   const closeDialogue = () => {
     behavior.touch();
@@ -543,13 +546,16 @@ function Game({
       Date.now(),
     );
     behavior.touch();
-    if (active || opening) return;
+    if (active || opening || chatting) return;
     if (greet) {
       setOpening(true);
       setDialogueStep('line');
       behavior.greet();
-    } else talk();
-  }, [behavior, active, opening, talk]);
+    } else {
+      setOpening(true);
+      setDialogueStep('choices');
+    }
+  }, [behavior, active, opening, chatting]);
   return (
     <section
       ref={container}
@@ -666,6 +672,21 @@ function Game({
         <div className="game-center" aria-hidden="true" />
         <GameTools panel={panel} onClose={() => setPanel(undefined)} />
       </div>
+      <CompanionChat
+        key={`${buddy.id}:${recoveryVersion}`}
+        buddy={buddy}
+        now={now}
+        open={chatting}
+        blocked={!!active || opening || behavior.travel || behavior.paused}
+        onOpen={() => {
+          closeDialogue();
+          setChatBuddyId(buddy.id);
+        }}
+        onClose={() => {
+          behavior.touch();
+          setChatBuddyId(undefined);
+        }}
+      />
       {(opening || active) && (
         <div className="game-interaction" ref={dialogueRef}>
           <div
@@ -710,6 +731,15 @@ function Game({
               <div className="dialogue-choices">
                 <button className="secondary-button" onClick={talk}>
                   聊聊
+                </button>
+                <button
+                  className="secondary-button"
+                  onClick={() => {
+                    closeDialogue();
+                    setChatBuddyId(buddy.id);
+                  }}
+                >
+                  想和你说说话
                 </button>
                 <button className="secondary-button" onClick={closeDialogue}>
                   先忙

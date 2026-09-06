@@ -71,6 +71,7 @@ export type Note = {
   source?: string;
 };
 export type AppData = {
+  proactiveSeen?: Record<string, string>;
   rewardLedger?: RewardGroup[];
   version: 2;
   studyProfile?: StudyProfile;
@@ -81,6 +82,7 @@ export type AppData = {
   events: ScheduleEvent[];
   campus: CampusDataState;
   settings: {
+    proactiveDialogue?: boolean;
     muted: boolean;
     reducedMotion: boolean;
     focusMinutes: number;
@@ -499,11 +501,25 @@ export function validateAppData(value: unknown): AppData {
     ...data,
     campus: normalizeCampusData(data.campus),
     rewardLedger,
+    proactiveSeen:
+      data.proactiveSeen &&
+      typeof data.proactiveSeen === 'object' &&
+      !Array.isArray(data.proactiveSeen)
+        ? Object.fromEntries(
+            Object.entries(data.proactiveSeen)
+              .filter(
+                ([k, v]) =>
+                  k.length <= 150 && typeof v === 'string' && v.length <= 150,
+              )
+              .slice(-500),
+          )
+        : {},
     studyProfile: normalizeStudyProfile(
       data.studyProfile ?? data.legacyProfile,
     ),
     settings: {
       muted: !!data.settings.muted,
+      proactiveDialogue: data.settings.proactiveDialogue !== false,
       showAcademicCalendar: data.settings.showAcademicCalendar === true,
       room: data.settings.room === 'classroom' ? 'classroom' : 'library',
       fatigueHours: Number.isFinite(data.settings.fatigueHours)
