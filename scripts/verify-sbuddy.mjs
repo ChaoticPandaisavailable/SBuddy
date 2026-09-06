@@ -35,7 +35,7 @@ try {
     caches: {
       keys: async () => [
         'study-buddies-shell-v10',
-        'study-buddies-shell-v27',
+        'study-buddies-shell-v28',
         'other-app',
       ],
       delete: async (key) => removedCaches.push(key),

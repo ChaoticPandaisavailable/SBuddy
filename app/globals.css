@@ -996,7 +996,7 @@ progress::-webkit-progress-value {
 }
 .current-character > .buddy-stage {
   max-width: 300px;
-  margin-top: 28px;
+  margin-top: 88px;
 }
 .character-name {
   display: flex;
