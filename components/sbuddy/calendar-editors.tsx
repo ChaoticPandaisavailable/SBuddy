@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ChevronRight, Plus, X } from 'lucide-react';
 import { Dialog } from './app';
 import { DatePicker, TimePicker } from './calendar-pickers';
-import { calendarDate, weekday } from '@/lib/calendar-layout';
+import { calendarDate, EVENT_CATEGORIES, weekday } from '@/lib/calendar-layout';
 import { localDate, validEvent } from '@/lib/sbuddy-state';
 import type { EventRepeat, ScheduleEvent } from '@/lib/schedule-parser';
 import type { CampusTodo } from '@/lib/campus-data';
@@ -74,20 +74,18 @@ export function CalendarEventEditor({
           </strong>
           <span>周{'一二三四五六日'[weekday(date) - 1]}</span>
         </button>
-        <div className="nero-type-toggle">
-          {['活动', '课程'].map((label, i) => (
+        <fieldset className="nero-type-toggle" aria-label="日程分类">
+          {EVENT_CATEGORIES.map(({ kind, label }) => (
             <button
               type="button"
-              key={label}
-              aria-pressed={
-                i === 1 ? draft.kind === 'class' : draft.kind !== 'class'
-              }
-              onClick={() => change({ kind: i === 1 ? 'class' : 'personal' })}
+              key={kind}
+              aria-pressed={draft.kind === kind}
+              onClick={() => change({ kind })}
             >
               {label}
             </button>
           ))}
-        </div>
+        </fieldset>
         <label>
           标题（必填）
           <input

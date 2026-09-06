@@ -1,3 +1,10 @@
+import { rewards } from './bond-rewards';
+import {
+  creditReward,
+  validManualSession,
+  validateRewardLedger,
+  type RewardGroup,
+} from './bond-scoring';
 import { validateSpriteManifest } from './sprite-animation';
 import {
   defaultAvatarStyle,
@@ -36,6 +43,7 @@ export type Buddy = {
   behavior?: BuddyBehavior;
 };
 export type FocusSession = {
+  rewardKey?: string;
   id: string;
   buddyId: string;
   duration: number;
@@ -44,6 +52,8 @@ export type FocusSession = {
   status: 'running' | 'paused' | 'complete';
 };
 export type FocusRecord = {
+  rewardKey?: string;
+  completedNormally?: boolean;
   id: string;
   buddyId: string;
   minutes: number;
@@ -61,6 +71,7 @@ export type Note = {
   source?: string;
 };
 export type AppData = {
+  rewardLedger?: RewardGroup[];
   version: 2;
   studyProfile?: StudyProfile;
   legacyPhotoPending?: boolean;
@@ -84,50 +95,7 @@ export type AppData = {
   courseware?: Courseware;
   demo: boolean;
 };
-export const rewards = [
-  {
-    id: '昵称「小搭子」',
-    threshold: 25,
-    title: '专属昵称',
-    text: '从今天开始，就叫我「小搭子」吧。',
-    animation: 'greet',
-  },
-  {
-    id: '新回应「轻轻敲门」',
-    threshold: 25,
-    title: '轻轻敲门',
-    text: '叩叩，我可以陪你开始今天的第一小步吗？',
-    animation: 'think',
-  },
-  {
-    id: '庆祝动作「像素击掌」',
-    threshold: 50,
-    title: '像素击掌',
-    text: '又完成了一小步！伸出手，和我击个掌。',
-    animation: 'cheer',
-  },
-  {
-    id: '隐藏问题',
-    threshold: 50,
-    title: '课间悄悄话',
-    text: '如果今天只留一件让自己开心的小事，你想做什么？',
-    animation: 'idle',
-  },
-  {
-    id: '特殊欢迎动画',
-    threshold: 75,
-    title: '等你回来',
-    text: '你回来啦。我把旁边的位置一直留着。',
-    animation: 'greet',
-  },
-  {
-    id: '知心完成语',
-    threshold: 75,
-    title: '一起走过的路',
-    text: '我记得你每一次开始的勇气。今天也辛苦啦。',
-    animation: 'cheer',
-  },
-] as const;
+export { rewards } from './bond-rewards';
 export function freshRelationship(): RelationshipState {
   return {
     ...initialRelationship,
@@ -191,6 +159,7 @@ export function createAppData(): AppData {
       showAcademicCalendar: false,
     },
     focusHistory: [],
+    rewardLedger: [],
     note: {
       id: 'current-note',
       title: '',
@@ -258,6 +227,8 @@ export function settleFocus(
     : focus.duration;
   if (seconds < 1) return { ...data, focus: undefined };
   const record = {
+    rewardKey: focus.rewardKey,
+    completedNormally: remainingSeconds(focus, now) === 0,
     id: focus.id,
     buddyId: focus.buddyId,
     minutes: Math.round((seconds / 60) * 10) / 10,
@@ -275,12 +246,15 @@ export function settleFocus(
       ? data.focusHistory
       : [...data.focusHistory, record],
   };
-  return data.focusHistory.some((r) => r.id === focus.id)
+  return data.focusHistory.some((r) => r.id === focus.id) ||
+    !record.completedNormally
     ? next
-    : updateBuddy(next, focus.buddyId, (b) => ({
-        ...b,
-        relationship: earnBond(b.relationship, early ? 1 : 3),
-      }));
+    : creditReward(
+        next,
+        focus.rewardKey ?? JSON.stringify(['focus', focus.id]),
+        focus.buddyId,
+        focus.id,
+      );
 }
 export function mergeEvents(
   current: ScheduleEvent[],
@@ -406,6 +380,20 @@ export function validateAppData(value: unknown): AppData {
   )
     throw new Error('数据格式不完整或版本不支持，未修改现有记录。');
   const campus = normalizeCampusData(data.campus);
+  const rewardLedger = validateRewardLedger(data.rewardLedger);
+  if (
+    data.buddies.some((b) => !validManualSession(b.behavior?.manualSession)) ||
+    (data.focus?.rewardKey !== undefined &&
+      (typeof data.focus.rewardKey !== 'string' || !data.focus.rewardKey)) ||
+    data.focusHistory.some(
+      (record) =>
+        (record.rewardKey !== undefined &&
+          (typeof record.rewardKey !== 'string' || !record.rewardKey)) ||
+        (record.completedNormally !== undefined &&
+          typeof record.completedNormally !== 'boolean'),
+    )
+  )
+    throw new Error('活动计分记录无效，未修改现有数据。');
   if (
     data.campus.schemaVersion !== 1 ||
     !validDate(data.campus.semesterStart) ||
@@ -500,6 +488,7 @@ export function validateAppData(value: unknown): AppData {
   return {
     ...data,
     campus: normalizeCampusData(data.campus),
+    rewardLedger,
     studyProfile: normalizeStudyProfile(
       data.studyProfile ?? data.legacyProfile,
     ),

@@ -5,7 +5,9 @@ export type Page =
   | 'daily'
   | 'tools'
   | 'gallery'
-  | 'settings';
+  | 'settings'
+  | 'animation-preview'
+  | 'interaction-guide';
 export type Tool = 'courseware' | 'notes' | 'gesture' | 'focus' | undefined;
 export type Subpage = Tool | 'schedule';
 export function parseNavigation(hash: string): { page: Page; sub?: Subpage } {
@@ -22,7 +24,15 @@ export function parseNavigation(hash: string): { page: Page; sub?: Subpage } {
         : undefined,
     };
   return {
-    page: ['home', 'play', 'characters', 'gallery', 'settings'].includes(page)
+    page: [
+      'home',
+      'play',
+      'characters',
+      'gallery',
+      'settings',
+      'animation-preview',
+      'interaction-guide',
+    ].includes(page)
       ? (page as Page)
       : 'home',
   };

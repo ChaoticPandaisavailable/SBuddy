@@ -16,7 +16,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { useStudy } from './provider';
-import { BuddyStage, FocusControls, PageTitle, type Tool } from './app';
+import { FocusControls, PageTitle, type Tool } from './app';
 import { CoursewareTool } from './courseware-tool';
 import {
   useGestureCamera,
@@ -396,9 +396,6 @@ function NotesTool({ active }: { active: boolean }) {
               />
             </label>
           </div>
-          <p className="muted">
-            实时听写由浏览器提供，可能使用浏览器厂商的在线语音服务；只在点击后开启。也可直接输入文字。
-          </p>
           {interim && (
             <p className="inline-message" aria-live="polite">
               正在识别：{interim}
@@ -519,7 +516,7 @@ function NotesTool({ active }: { active: boolean }) {
 }
 function GestureTool({ active }: { active: boolean }) {
   const { data, startFocus, toggleFocus, finishFocus, notify } = useStudy();
-  const [feedback, setFeedback] = useState('准备好后，开启摄像头。');
+  const [feedback, setFeedback] = useState('');
   const buddy = data.buddies.find((b) => b.id === data.activeBuddyId)!;
   const handle = (gesture: CompanionGesture) => {
     if (gesture === 'open_palm')
@@ -596,35 +593,28 @@ function GestureTool({ active }: { active: boolean }) {
               <span>{action}</span>
             </div>
           ))}
-          <p className="inline-message" aria-live="polite">
-            {['denied', 'error', 'unsupported'].includes(cameraStatus)
-              ? '摄像头或识别模型不可用，请检查权限；所有操作也可使用页面按钮完成。'
-              : feedback}
-          </p>
-          <FocusControls />
+          {(feedback ||
+            ['denied', 'error', 'unsupported'].includes(cameraStatus)) && (
+            <p className="inline-message" aria-live="polite">
+              {['denied', 'error', 'unsupported'].includes(cameraStatus)
+                ? '摄像头或识别模型不可用，请检查权限，或到番茄钟工具操作。'
+                : feedback}
+            </p>
+          )}
         </section>
       </div>
     </>
   );
 }
 function FocusTool() {
-  const { data, setData, startFocus, showcase } = useStudy();
+  const { data, setData, showcase } = useStudy();
   const [minutes, setMinutes] = useState(data.settings.focusMinutes);
-  const buddy =
-    data.buddies.find(
-      (b) => b.id === (data.focus?.buddyId ?? data.activeBuddyId),
-    ) ?? data.buddies[0];
   return (
     <>
       <PageTitle title="番茄钟" />
       <div className="focus-workspace">
         <section className="focus-main">
-          <BuddyStage
-            buddy={buddy}
-            animation={data.focus?.status === 'running' ? 'study' : 'idle'}
-          />
-          <h2>{buddy.name} 陪你专注</h2>
-          <FocusControls />
+          <FocusControls minutes={minutes} />
           <div className="button-row centered focus-presets">
             {(showcase ? [1, 10, 25] : [10, 25, 45]).map((m) => (
               <button
@@ -654,13 +644,6 @@ function FocusTool() {
             </label>
           </div>
           <div className="button-row centered">
-            <button
-              className="primary-button"
-              disabled={!!data.focus && data.focus.status !== 'complete'}
-              onClick={() => startFocus(minutes)}
-            >
-              开始 {minutes} 分钟
-            </button>
             <button
               className="text-button"
               onClick={() => {

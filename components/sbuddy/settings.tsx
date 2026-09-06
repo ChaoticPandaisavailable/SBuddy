@@ -425,9 +425,6 @@ export function SettingsPage() {
           </div>
         </section>
         <section className="settings-about">
-          <strong>SBuddy</strong>
-          <p>完蛋！我被学习搭子包围了</p>
-
           <p className="small">
             AI
             服务为可选项。照片、截图与录音只在主动使用对应功能时提交到所配置的服务；摄像头手势在本机处理。关闭页面后不发送定时提醒。

@@ -332,7 +332,6 @@ export function NeroCalendar({
                 今天
               </button>
               <button className="text-button" onClick={makeEvent}>
-                <Plus size={16} />
                 添加日程
               </button>
             </div>

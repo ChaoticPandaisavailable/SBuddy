@@ -26,7 +26,8 @@ import {
   type Completion,
   type CompletionSnapshot,
 } from '@/lib/companion-behavior';
-import { updateBuddy } from '@/lib/sbuddy-state';
+import { beginFocus, pauseManualActivity } from '@/lib/activity-scoring';
+import { creditReward } from '@/lib/bond-scoring';
 import {
   createShowcaseData,
   isShowcase,
@@ -77,7 +78,27 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       observed.current = next;
       if (items.length) {
         items.forEach((e) => completed.current.add(e.id));
-        setCompletion((c) => ({ sequence: c.sequence + 1, items }));
+        const ownedItems = items.map((item) =>
+          item.rewardKey
+            ? {
+                ...item,
+                buddyId:
+                  data.rewardLedger?.find(
+                    (group) => group.id === item.rewardKey,
+                  )?.buddyId ?? data.activeBuddyId,
+              }
+            : item,
+        );
+        setData((current) =>
+          ownedItems.reduce(
+            (next, item) =>
+              item.rewardKey
+                ? creditReward(next, item.rewardKey, item.buddyId!)
+                : next,
+            current,
+          ),
+        );
+        setCompletion((c) => ({ sequence: c.sequence + 1, items: ownedItems }));
       }
     };
     sample();
@@ -187,21 +208,9 @@ export function StudyProvider({ children }: { children: ReactNode }) {
       notify('已有专注会话，请继续或重置后再开始。');
       return;
     }
-    const duration = Math.max(1, Math.min(180, minutes)) * 60;
-    setData((current) => ({
-      ...updateBuddy(current, current.activeBuddyId, (b) => ({
-        ...b,
-        behavior: { ...b.behavior, mode: 'manual', activity: 'study' },
-      })),
-      focus: {
-        id: crypto.randomUUID(),
-        buddyId: current.activeBuddyId,
-        duration,
-        remaining: duration,
-        endsAt: Date.now() + duration * 1000,
-        status: 'running',
-      },
-    }));
+    const id = crypto.randomUUID(),
+      now = Date.now();
+    setData((current) => beginFocus(current, minutes, now, id));
   };
   const toggleFocus = () =>
     setData((current) => {
@@ -211,12 +220,12 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         const remaining = remainingSeconds(focus);
         if (remaining === 0) return settleFocus(current);
         return {
-          ...current,
+          ...pauseManualActivity(current, focus.buddyId, true, Date.now()),
           focus: { ...focus, status: 'paused', remaining, endsAt: undefined },
         };
       }
       return {
-        ...current,
+        ...pauseManualActivity(current, focus.buddyId, false, Date.now()),
         focus: {
           ...focus,
           status: 'running',
@@ -257,7 +266,13 @@ export function StudyProvider({ children }: { children: ReactNode }) {
         startFocus,
         toggleFocus,
         finishFocus: () =>
-          setData((current) => settleFocus(current, Date.now(), true)),
+          setData((current) => {
+            const now = Date.now();
+            const next = settleFocus(current, now, true);
+            return current.focus?.status === 'paused'
+              ? pauseManualActivity(next, current.focus.buddyId, false, now)
+              : next;
+          }),
       }}
     >
       {children}

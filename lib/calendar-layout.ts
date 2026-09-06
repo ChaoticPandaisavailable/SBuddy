@@ -237,15 +237,23 @@ export function packEvents(events: ScheduleEvent[]) {
   flush();
   return sorted;
 }
+export const EVENT_CATEGORIES = [
+  { kind: 'class', label: '课程', color: '#5f7358' },
+  { kind: 'study', label: '自习', color: '#8b774b' },
+  { kind: 'meeting', label: '会议', color: '#587b79' },
+  { kind: 'personal', label: '其他', color: '#84796d' },
+] as const;
 export const eventLabel = (event: ScheduleEvent) =>
   event.source === 'campus-todo'
     ? '待办'
     : event.source === 'campus-exam'
       ? '考试'
-      : event.kind === 'class'
-        ? '课程'
-        : '活动';
+      : EVENT_CATEGORIES.find((category) => category.kind === event.kind)!
+          .label;
 export const eventColor = (event: ScheduleEvent) =>
-  ({ 待办: '#7c3aed', 考试: '#b45309', 课程: '#1d4ed8', 活动: '#d0a600' })[
-    eventLabel(event)
-  ];
+  event.source === 'campus-todo'
+    ? '#7a6e85'
+    : event.source === 'campus-exam'
+      ? '#a17a50'
+      : EVENT_CATEGORIES.find((category) => category.kind === event.kind)!
+          .color;

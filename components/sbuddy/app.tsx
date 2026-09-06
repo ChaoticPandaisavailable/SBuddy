@@ -63,6 +63,8 @@ import { playCompanionSound } from '@/lib/companion-sound';
 import { needsGreeting } from '@/lib/companion-behavior';
 import { useCompanionBehavior } from './use-companion-behavior';
 import { SHOWCASE_URL } from '@/lib/showcase';
+import { AnimationPreview } from './animation-preview';
+import { InteractionGuide } from './interaction-guide';
 
 export type { Page, Tool } from '@/lib/app-navigation';
 const navigation = [
@@ -82,24 +84,23 @@ export function SBuddyApp() {
   );
 }
 function AppShell() {
-  const {
-    data,
-    notice,
-    notify,
-    ready,
-    recoveryVersion,
-    showcase,
-    resetShowcase,
-  } = useStudy();
+  const { data, notice, notify, ready, recoveryVersion, showcase } = useStudy();
   const [page, setPage] = useState<Page>('home');
   const [tool, setTool] = useState<Subpage>();
   const [drawer, setDrawer] = useState(false);
+  const returnTarget = useRef<{ page: Page; sub?: Subpage }>({ page: 'home' });
+  useEffect(() => {
+    if (page !== 'animation-preview' && page !== 'interaction-guide')
+      returnTarget.current = { page, sub: tool };
+  }, [page, tool]);
   const buddy = data.buddies.find((b) => b.id === data.activeBuddyId)!;
   useEffect(() => {
     const sync = () => {
       const next = parseNavigation(location.hash);
       setPage(next.page);
       setTool(next.sub);
+      setDrawer(false);
+      window.scrollTo({ top: 0, behavior: 'instant' });
       if (location.hash === '#tools/schedule')
         window.history.replaceState(null, '', '#daily/schedule');
     };
@@ -158,51 +159,26 @@ function AppShell() {
           </span>
           <span>SBuddy</span>
         </button>
-        {showcase && (
-          <div className="showcase-controls">
-            <span>展示空间</span>
-            <button
-              onClick={() => {
-                resetShowcase();
-                navigate('play');
-              }}
-            >
-              重置演示
-            </button>
-            <button onClick={() => window.location.assign('/#home')}>
-              退出
-            </button>
-          </div>
-        )}
-        <button
-          className="current-buddy"
-          onClick={() => navigate('characters')}
-        >
-          <span className="online-dot" />
-          {page === 'home' ? '选择搭子' : buddy.name}
-          <ChevronRight size={15} />
-        </button>
+        <span className="header-project-name">完蛋！我被学习搭子包围了</span>
+        <nav className="header-resource-links" aria-label="展示与说明">
+          <a
+            className="header-animation-link"
+            href="#animation-preview"
+            aria-current={page === 'animation-preview' ? 'page' : undefined}
+          >
+            动画预览
+          </a>
+          <a
+            className="header-animation-link"
+            href="#interaction-guide"
+            aria-current={page === 'interaction-guide' ? 'page' : undefined}
+          >
+            互动说明
+          </a>
+        </nav>
       </header>
       <aside className="desktop-nav">
         <nav aria-label="主导航">{nav}</nav>
-        {showcase && (
-          <div className="showcase-route">
-            <span>三分钟，认识 SBuddy</span>
-            <button onClick={() => navigate('play')}>
-              01 <span>遇见学习搭子</span>
-            </button>
-            <button onClick={() => navigate('daily', 'schedule')}>
-              02 <span>把安排变成日程</span>
-            </button>
-            <button onClick={() => navigate('tools', 'notes')}>
-              03 <span>从纪要到待办</span>
-            </button>
-            <p>专注 1 分钟，体验成长奖励。</p>
-            <a href="/animation-preview" target="_blank" rel="noreferrer">
-              动作展示 ↗
-            </a>
-          </div>
-        )}
       </aside>
       <dialog
         ref={menuRef}
@@ -232,6 +208,20 @@ function AppShell() {
           <div className="demo-banner">当前包含演示数据，可在设置中清空。</div>
         )}
         {page === 'home' && <Landing navigate={navigate} />}
+        {page === 'animation-preview' && (
+          <AnimationPreview
+            onBack={() =>
+              navigate(returnTarget.current.page, returnTarget.current.sub)
+            }
+          />
+        )}
+        {page === 'interaction-guide' && (
+          <InteractionGuide
+            onBack={() =>
+              navigate(returnTarget.current.page, returnTarget.current.sub)
+            }
+          />
+        )}
         {page === 'play' && (
           <Game
             key={buddy.id + recoveryVersion}
@@ -248,12 +238,6 @@ function AppShell() {
             />
           </div>
           <div hidden={tool !== 'schedule'}>
-            <button
-              className="text-button back-button"
-              onClick={() => navigate('daily')}
-            >
-              返回日常活动
-            </button>
             <ScheduleTool onCalendar={() => navigate('daily')} />
           </div>
         </div>
@@ -283,37 +267,23 @@ function Landing({
 }: {
   navigate: (page: Page, tool?: Tool) => void;
 }) {
-  const { showcase } = useStudy();
   return (
     <div className="landing">
       <section className="landing-hero">
         <div className="hero-copy">
-          <span className="hero-eyebrow">SBUDDY · 学习，也可以有陪伴</span>
+          <div className="hero-project-name">SBuddy</div>
           <h1>
             完蛋！
             <br />
             我被学习搭子
             <br />
-            <em>包围了。</em>
+            <em>包围了</em>
           </h1>
-          <p>
-            从第一句问候，到每一次完成。
-            <br />
-            让计划、专注和陪伴，发生在同一张桌上。
-          </p>
           <div className="button-row">
             <a className="primary-button" href={SHOWCASE_URL}>
-              体验展示
+              开始体验
               <ArrowRight size={18} />
             </a>
-            <button
-              className="secondary-button"
-              onClick={() =>
-                showcase ? window.location.assign('/#play') : navigate('play')
-              }
-            >
-              进入我的空间
-            </button>
           </div>
         </div>
         <div
@@ -326,9 +296,6 @@ function Landing({
             fullRoom
             scene
           />
-          <div className="hero-scene-caption">
-            <span className="online-dot" /> 你的座位，一直留着。
-          </div>
         </div>
       </section>
       <section className="showcase-features" aria-label="项目亮点">
@@ -463,12 +430,14 @@ function Game({
     return () => clearInterval(id);
   }, []);
   const [opening, setOpening] = useState(false);
+  const [dialogueStep, setDialogueStep] = useState<'line' | 'choices'>('line');
   const [conversation, setConversation] = useState<{
     buddyId: string;
     prompt: DialoguePrompt;
     response?: string;
   }>();
   const container = useRef<HTMLElement>(null);
+  const dialogueRef = useRef<HTMLDivElement>(null);
   const currentId = useRef(buddy.id);
   useEffect(() => {
     currentId.current = buddy.id;
@@ -481,6 +450,14 @@ function Game({
     now,
   );
   const active = conversation?.buddyId === buddy.id ? conversation : undefined;
+  const showingResponse = !!active?.response;
+  useEffect(() => {
+    dialogueRef.current
+      ?.querySelector<HTMLButtonElement>(
+        '.dialogue-line, .dialogue-choices button',
+      )
+      ?.focus({ preventScroll: true });
+  }, [opening, dialogueStep, active?.prompt.id, showingResponse]);
   const behavior = useCompanionBehavior(
     buddy,
     schedule.todayEvents,
@@ -492,6 +469,7 @@ function Game({
     behavior.touch();
     setOpening(false);
     setConversation(undefined);
+    setDialogueStep('line');
   };
   useEffect(() => {
     const exit = () => {
@@ -529,6 +507,7 @@ function Game({
   const talk = useCallback(() => {
     behavior.touch();
     setOpening(false);
+    setDialogueStep('line');
     const prompt =
       selectPrompt(buddy.relationship, 'demo', new Date(), false) ??
       dialoguePrompts.find(
@@ -566,6 +545,7 @@ function Game({
     if (active || opening) return;
     if (greet) {
       setOpening(true);
+      setDialogueStep('line');
       behavior.greet();
     } else talk();
   }, [behavior, active, opening, talk]);
@@ -675,22 +655,47 @@ function Game({
         <div className="game-center" aria-hidden="true" />
         <GameTools panel={panel} onClose={() => setPanel(undefined)} />
       </div>
-      <div className="game-interaction">
-        <div className="dialogue-box" aria-label="搭子对话">
-          <div className="dialogue-heading">
-            {(active || opening) && (
+      {(opening || active) && (
+        <div className="game-interaction" ref={dialogueRef}>
+          <div
+            className="dialogue-box dialogue-scene-page"
+            aria-label="搭子对话"
+            data-dialogue-step={active?.response ? 'response' : dialogueStep}
+          >
+            <div className="dialogue-heading">
+              {(active || opening) && (
+                <button
+                  className="icon-button"
+                  aria-label="收起对话"
+                  onClick={closeDialogue}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            {dialogueStep === 'line' || active?.response ? (
               <button
-                className="icon-button"
-                aria-label="收起对话"
-                onClick={closeDialogue}
+                className="dialogue-line"
+                aria-label={active?.response ? '结束对话' : '继续对话'}
+                aria-describedby="scene-dialogue-line"
+                onClick={() => {
+                  behavior.touch();
+                  if (active?.response) closeDialogue();
+                  else setDialogueStep('choices');
+                }}
               >
-                <X size={16} />
+                <span id="scene-dialogue-line" aria-live="polite">
+                  {opening
+                    ? 'Hello，想聊聊吗？'
+                    : (active?.response ?? active?.prompt.text)}
+                </span>
+                <ChevronRight
+                  className="dialogue-advance"
+                  size={20}
+                  aria-hidden="true"
+                />
               </button>
-            )}
-          </div>
-          {opening ? (
-            <>
-              <p aria-live="polite">Hello，想聊聊吗？</p>
+            ) : opening ? (
               <div className="dialogue-choices">
                 <button className="secondary-button" onClick={talk}>
                   聊聊
@@ -699,88 +704,82 @@ function Game({
                   先忙
                 </button>
               </div>
-            </>
-          ) : active ? (
-            <>
-              <p aria-live="polite">{active.response ?? active.prompt.text}</p>
-              {active.response ? (
-                <button className="primary-button" onClick={closeDialogue}>
-                  继续
-                  <Check size={16} />
-                </button>
-              ) : (
-                <div className="dialogue-choices">
-                  {active.prompt.choices.map((choice) => (
-                    <button
-                      className="secondary-button"
-                      key={choice.id}
-                      onClick={() => {
-                        behavior.touch();
-                        const id = buddy.id;
-                        setData((d) =>
-                          updateBuddy(d, id, (b) =>
-                            b.relationship.answeredPromptIds.includes(
-                              active.prompt.id,
+            ) : active ? (
+              <div className="dialogue-choices">
+                {active.prompt.choices.map((choice) => (
+                  <button
+                    className="secondary-button"
+                    key={choice.id}
+                    onClick={() => {
+                      behavior.touch();
+                      setDialogueStep('line');
+                      const id = buddy.id;
+                      setData((d) =>
+                        updateBuddy(d, id, (b) =>
+                          b.relationship.answeredPromptIds.includes(
+                            active.prompt.id,
+                          )
+                            ? b
+                            : {
+                                ...b,
+                                relationship: applyDialogueChoice(
+                                  b.relationship,
+                                  active.prompt,
+                                  choice,
+                                  new Date(),
+                                ).state,
+                              },
+                        ),
+                      );
+                      setConversation({
+                        ...active,
+                        response: choice.reaction,
+                      });
+                      playCompanionSound('select', data.settings.muted);
+                      if (!showcase)
+                        void fetch('/api/ai/dialogue', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            text: choice.reaction,
+                            context: active.prompt.id,
+                            buddyName: buddy.name,
+                            personality: buddy.personality,
+                            preferences: {
+                              ...buddy.relationship.preferences,
+                              ...(choice.preference
+                                ? {
+                                    [choice.preference.key]:
+                                      choice.preference.value,
+                                  }
+                                : {}),
+                            },
+                          }),
+                        })
+                          .then((r) => r.json() as Promise<{ text?: string }>)
+                          .then((result) => {
+                            if (
+                              currentId.current === id &&
+                              typeof result.text === 'string'
                             )
-                              ? b
-                              : {
-                                  ...b,
-                                  relationship: applyDialogueChoice(
-                                    b.relationship,
-                                    active.prompt,
-                                    choice,
-                                    new Date(),
-                                  ).state,
-                                },
-                          ),
-                        );
-                        setConversation({
-                          ...active,
-                          response: choice.reaction,
-                        });
-                        playCompanionSound('select', data.settings.muted);
-                        if (!showcase)
-                          void fetch('/api/ai/dialogue', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              text: choice.reaction,
-                              context: active.prompt.id,
-                              buddyName: buddy.name,
-                              personality: buddy.personality,
-                            }),
+                              setConversation((c) =>
+                                c?.buddyId === id &&
+                                c.prompt.id === active.prompt.id
+                                  ? { ...c, response: result.text }
+                                  : c,
+                              );
                           })
-                            .then((r) => r.json() as Promise<{ text?: string }>)
-                            .then((result) => {
-                              if (
-                                currentId.current === id &&
-                                typeof result.text === 'string'
-                              )
-                                setConversation((c) =>
-                                  c?.buddyId === id &&
-                                  c.prompt.id === active.prompt.id
-                                    ? { ...c, response: result.text }
-                                    : c,
-                                );
-                            })
-                            .catch(() => undefined);
-                      }}
-                    >
-                      {choice.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <p className="dialogue-idle">
-                {behavior.paused ? '休息一下，继续计时后我就回来。' : '我在。'}
-              </p>
-            </>
-          )}
+                          .catch(() => undefined);
+                    }}
+                  >
+                    {choice.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }

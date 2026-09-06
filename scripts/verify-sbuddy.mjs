@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { verifySprites } from './verify-sprites.mjs';
+import { verifyScoring } from './verify-scoring.mjs';
 import { verifyShowcase } from './verify-showcase.mjs';
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
@@ -34,7 +35,7 @@ try {
     caches: {
       keys: async () => [
         'study-buddies-shell-v10',
-        'study-buddies-shell-v15',
+        'study-buddies-shell-v20',
         'other-app',
       ],
       delete: async (key) => removedCaches.push(key),
@@ -70,6 +71,7 @@ try {
     },
   );
   const state = await server.ssrLoadModule('/lib/sbuddy-state.ts');
+  await verifyScoring(server, check, state);
   await verifyChibi(server, check, state);
   await verifyCourseware(server, check, state);
   const parser = await server.ssrLoadModule('/lib/schedule-parser.ts');
@@ -78,6 +80,26 @@ try {
   const insights = await server.ssrLoadModule('/lib/study-insight.ts');
   const impressions = await server.ssrLoadModule('/lib/impression-summary.ts');
   const calendar = await server.ssrLoadModule('/lib/calendar-layout.ts');
+  const navigation = await server.ssrLoadModule('/lib/app-navigation.ts');
+  check(
+    'preview and interaction guide use hash pages without replacing existing routes',
+    () => {
+      for (const page of [
+        'animation-preview',
+        'interaction-guide',
+        'home',
+        'play',
+        'characters',
+        'settings',
+      ])
+        assert.deepEqual(navigation.parseNavigation('#' + page), { page });
+      assert.deepEqual(navigation.parseNavigation('#tools/notes'), {
+        page: 'tools',
+        sub: 'notes',
+      });
+    },
+  );
+  const scheduleEngine = await server.ssrLoadModule('/lib/schedule-engine.ts');
   const eventSeed = {
     id: 'calendar-test',
     date: '2026-09-06',
@@ -87,6 +109,29 @@ try {
     end: '15:00',
     kind: 'study',
   };
+  check(
+    'four calendar categories retain their animation modes through backup',
+    () => {
+      const data = state.createAppData();
+      data.events = ['class', 'study', 'meeting', 'personal'].map((kind) => ({
+        ...eventSeed,
+        id: `category-${kind}`,
+        kind,
+      }));
+      const restored = state.validateAppData(JSON.parse(JSON.stringify(data)));
+      assert.deepEqual(restored.events.map(calendar.eventLabel), [
+        '课程',
+        '自习',
+        '会议',
+        '其他',
+      ]);
+      assert.deepEqual(
+        restored.events.map((event) => scheduleEngine.kindToMode(event.kind)),
+        ['class', 'study', 'meeting', 'idle'],
+      );
+      assert.equal(new Set(restored.events.map(calendar.eventColor)).size, 4);
+    },
+  );
   check(
     'month grid uses Sunday first and handles four, five and six rows',
     () => {
@@ -711,7 +756,7 @@ try {
     }));
     assert.equal(next.buddies[0].relationship.bond, 0);
     assert.equal(next.buddies[1].relationship.bond, 25);
-    assert.equal(next.buddies[1].relationship.unlocked.length, 2);
+    assert.equal(next.buddies[1].relationship.unlocked.length, 1);
   });
   check('late asynchronous result retains originating buddy', () => {
     const d = { ...state.createAppData(), activeBuddyId: 'zhixu' };
@@ -736,7 +781,7 @@ try {
       },
     };
     const next = state.settleFocus(d, 2000);
-    assert.equal(next.buddies[0].relationship.bond, 3);
+    assert.equal(next.buddies[0].relationship.bond, 1);
     assert.equal(next.buddies[1].relationship.bond, 0);
     assert.equal(next.focusHistory[0].minutes, 10);
   });
@@ -755,7 +800,7 @@ try {
     const once = state.settleFocus(d, 2000),
       twice = state.settleFocus(once, 99999);
     assert.equal(twice.focusHistory.length, 1);
-    assert.equal(twice.buddies[0].relationship.bond, 3);
+    assert.equal(twice.buddies[0].relationship.bond, 1);
   });
   check('background time uses deadline instead of tick count', () =>
     assert.equal(
@@ -786,7 +831,7 @@ try {
     };
     const n = state.settleFocus(d, 120000, true);
     assert.equal(n.focusHistory[0].minutes, 2);
-    assert.equal(n.buddies[0].relationship.bond, 1);
+    assert.equal(n.buddies[0].relationship.bond, 0);
   });
   check('zero-time focus does not earn a reward', () => {
     const d = {
@@ -807,13 +852,29 @@ try {
   check('earned rewards never relock', () => {
     const bond = state.earnBond(state.freshRelationship(), 25);
     const lower = state.earnBond(bond, -2);
-    assert.equal(lower.unlocked.length, 2);
+    assert.equal(lower.unlocked.length, 1);
   });
-  check('all six gallery rewards at 75', () =>
-    assert.equal(
-      state.earnBond(state.freshRelationship(), 75).unlocked.length,
-      6,
-    ),
+  check(
+    'gallery rewards unlock every 25 points through both focus and dialogue',
+    () => {
+      assert.deepEqual(
+        state.rewards.map((reward) => reward.threshold),
+        [25, 50, 75, 100, 125, 150],
+      );
+      for (let i = 0; i < 6; i++) {
+        const threshold = (i + 1) * 25;
+        const before = state.earnBond(state.freshRelationship(), threshold - 1);
+        assert.equal(before.unlocked.length, i);
+        assert.equal(state.earnBond(before, 1).unlocked.length, i + 1);
+        const prompt = relationship.dialoguePrompts[0];
+        const choice = prompt.choices.find((item) => item.delta === 1);
+        assert.equal(
+          relationship.applyDialogueChoice(before, prompt, choice, new Date())
+            .state.unlocked.length,
+          i + 1,
+        );
+      }
+    },
   );
   check('dialogue keeps prior unlocks when bond falls', () => {
     const r = state.earnBond(state.freshRelationship(), 25);
@@ -826,7 +887,7 @@ try {
       p.choices.find((c) => c.delta < 0),
       new Date(),
     ).state;
-    assert.equal(n.unlocked.length, 2);
+    assert.equal(n.unlocked.length, 1);
   });
   check('legacy migration retains bond, appearance and study history', () => {
     const map = {
@@ -911,6 +972,9 @@ try {
   );
   const storage = await server.ssrLoadModule('/lib/sbuddy-storage.ts');
   const avatarApi = await server.ssrLoadModule('/app/api/ai/avatar/route.ts');
+  const dialogueApi = await server.ssrLoadModule(
+    '/app/api/ai/dialogue/route.ts',
+  );
   const previousKey = process.env.OPENAI_API_KEY;
   const originalFetch = globalThis.fetch;
   const post = (data) =>
@@ -963,6 +1027,41 @@ try {
     await assert.rejects(storage.assetTransaction());
     check('unavailable IndexedDB rejects instead of reporting saved', () => {});
     process.env.OPENAI_API_KEY = 'test-only-placeholder';
+    let dialogueInput;
+    globalThis.fetch = async (_url, options) => {
+      dialogueInput = JSON.parse(options.body);
+      return Response.json({
+        output_text: JSON.stringify({ text: '好，我会轻轻提醒。' }),
+      });
+    };
+    const flexible = await (
+      await dialogueApi.POST(
+        post({
+          text: '收到，我会提醒你。',
+          personality: '未知',
+          preferences: {
+            reminderStyle: 'gentle',
+            irrelevant: 'should-not-forward',
+          },
+        }),
+      )
+    ).json();
+    check(
+      'unknown personality uses saved preferences without forwarding arbitrary fields',
+      () => {
+        assert.equal(flexible.source, 'ai');
+        assert.ok(dialogueInput.instructions.includes('性格尚未定型'));
+        assert.ok(dialogueInput.input.includes('gentle'));
+        assert.ok(!dialogueInput.input.includes('should-not-forward'));
+        const data = state.createAppData();
+        data.buddies[0].personality = '未知';
+        assert.equal(
+          state.validateAppData(JSON.parse(JSON.stringify(data))).buddies[0]
+            .personality,
+          '未知',
+        );
+      },
+    );
     const upload = () => {
       const form = new FormData();
       form.set(

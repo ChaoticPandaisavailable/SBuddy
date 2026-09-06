@@ -1,4 +1,5 @@
 import type { AnimationState } from '@/lib/companion-animation';
+import { rewards } from './bond-rewards';
 
 export type BondLevel = '初识' | '熟悉' | '默契' | '知心';
 export type DialogueTrigger =
@@ -12,7 +13,7 @@ export type DialogueTrigger =
 export type DialogueChoice = {
   id: string;
   label: string;
-  delta: -2 | 1 | 3;
+  delta: -1 | 1 | 2;
   reaction: string;
   preference?: { key: keyof RelationshipPreferences; value: string };
 };
@@ -79,14 +80,14 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'gentle',
         label: '偶尔轻轻提醒我',
-        delta: 3,
+        delta: 2,
         reaction: '收到。我会敲敲门，不会拿着喇叭闯进来。',
         preference: { key: 'reminderStyle', value: 'gentle' },
       },
       {
         id: 'quiet',
         label: '安静待着就很好',
-        delta: 3,
+        delta: 2,
         reaction: '懂了。需要时抬头，我一直在。',
         preference: { key: 'reminderStyle', value: 'quiet' },
       },
@@ -108,14 +109,14 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'tiny',
         label: '先做最小的一步',
-        delta: 3,
+        delta: 2,
         reaction: '成交。以后大任务来了，我先帮你把门槛锯低。',
         preference: { key: 'taskApproach', value: 'tiny-step' },
       },
       {
         id: 'overview',
         label: '先帮我理清全局',
-        delta: 3,
+        delta: 2,
         reaction: '明白。先找地图，再迈第一步。',
         preference: { key: 'taskApproach', value: 'overview' },
       },
@@ -137,19 +138,19 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'relief',
         label: '终于没那么乱了',
-        delta: 3,
+        delta: 2,
         reaction: '那就好。乱糟糟的东西一旦有了形状，就没那么吓人。',
       },
       {
         id: 'pressure',
         label: '还是有一点压力',
-        delta: 3,
+        delta: 2,
         reaction: '合理。日历只是地图，不是催债单，我们只看下一格。',
       },
       {
         id: 'avoid',
         label: '不想看，先关掉',
-        delta: -2,
+        delta: -1,
         reaction:
           '也行，我先收好。只是别消失太久，我会担心任务在角落偷偷长大。',
       },
@@ -171,14 +172,14 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'easy',
         label: '先做最容易启动的',
-        delta: 3,
+        delta: 2,
         reaction: '很会选。先用一点进展，把发动机热起来。',
         preference: { key: 'taskApproach', value: 'easy-first' },
       },
       {
         id: 'important',
         label: '先看最重要的',
-        delta: 3,
+        delta: 2,
         reaction: '好。我们不被红点牵着跑，先守住真正重要的。',
         preference: { key: 'taskApproach', value: 'important-first' },
       },
@@ -193,7 +194,7 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'lighter',
         label: '比开始前轻松一点',
-        delta: 3,
+        delta: 2,
         reaction: '看吧，最难的果然是点火。这个小胜利我替你存好了。',
       },
       {
@@ -205,7 +206,7 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'drained',
         label: '更累了',
-        delta: 3,
+        delta: 2,
         reaction: '那就停在这里。知道什么时候该收手，也是我们之间的默契。',
       },
     ],
@@ -219,14 +220,14 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'continue',
         label: '再来一个专注块',
-        delta: 3,
+        delta: 2,
         reaction: '有余力就走，但还是一小块一小块来。',
         preference: { key: 'breakStyle', value: 'continue' },
       },
       {
         id: 'short-break',
         label: '先休息五分钟',
-        delta: 3,
+        delta: 2,
         reaction: '批准。去喝口水，我负责看住进度条。',
         preference: { key: 'breakStyle', value: 'short' },
       },
@@ -248,14 +249,14 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'resume',
         label: '直接告诉我做到哪了',
-        delta: 3,
+        delta: 2,
         reaction: '没问题。断点我帮你夹着书签呢。',
         preference: { key: 'reminderStyle', value: 'resume-direct' },
       },
       {
         id: 'welcome',
         label: '先跟我打个招呼',
-        delta: 3,
+        delta: 2,
         reaction: '欢迎回来！这句不计入工作时间，纯属搭子福利。',
         preference: { key: 'socialTone', value: 'warm-welcome' },
       },
@@ -277,19 +278,19 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'one-minute',
         label: '只做一分钟',
-        delta: 3,
+        delta: 2,
         reaction: '漂亮。小到不能拒绝，通常最容易真的开始。',
       },
       {
         id: 'review',
         label: '先回顾刚才的进度',
-        delta: 3,
+        delta: 2,
         reaction: '好，我陪你把上下文捡回来。',
       },
       {
         id: 'later',
         label: '晚点再说',
-        delta: -2,
+        delta: -1,
         reaction: '可以，但我会把任务放在看得见的地方，免得“晚点”偷偷跑远。',
       },
     ],
@@ -303,19 +304,19 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'lower',
         label: '好，只保留最重要的',
-        delta: 3,
+        delta: 2,
         reaction: '聪明。低电量模式不是偷懒，是系统保护。',
       },
       {
         id: 'tiny',
         label: '先试五分钟',
-        delta: 3,
+        delta: 2,
         reaction: '五分钟就五分钟。我们今天主打一个轻装上阵。',
       },
       {
         id: 'push',
         label: '不用，我想硬撑一下',
-        delta: -2,
+        delta: -1,
         reaction: '我尊重你，但会把水和暂停键放在手边。硬撑也得留条退路。',
       },
     ],
@@ -329,21 +330,21 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'walk',
         label: '起来走一走',
-        delta: 3,
+        delta: 2,
         reaction: '记住了。下次休息我会把你从椅子上“请”起来。',
         preference: { key: 'breakStyle', value: 'walk' },
       },
       {
         id: 'music',
         label: '听一首歌',
-        delta: 3,
+        delta: 2,
         reaction: '好，一首歌的时间，刚好够脑内缓存清一清。',
         preference: { key: 'breakStyle', value: 'music' },
       },
       {
         id: 'scroll',
         label: '刷会儿手机',
-        delta: -2,
+        delta: -1,
         reaction: '诚实加分，但它有时会把五分钟吃成五十分钟。我到点敲你一下？',
         preference: { key: 'breakStyle', value: 'phone' },
       },
@@ -358,14 +359,14 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'choose',
         label: '不知道先做哪个',
-        delta: 3,
+        delta: 2,
         reaction: '以后我先给你一个唯一入口，暂时把其他门关上。',
         preference: { key: 'taskApproach', value: 'single-entry' },
       },
       {
         id: 'perfect',
         label: '总想一开始就做好',
-        delta: 3,
+        delta: 2,
         reaction: '抓到了。以后我负责提醒你：草稿丑一点，世界不会塌。',
         preference: { key: 'taskApproach', value: 'draft-first' },
       },
@@ -388,19 +389,19 @@ export const dialoguePrompts: DialoguePrompt[] = [
       {
         id: 'started',
         label: '拖了很久但终于开始',
-        delta: 3,
+        delta: 2,
         reaction: '这很了不起。开始不是小事，是你把方向盘拿回来了。',
       },
       {
         id: 'finished',
         label: '把一件难事做完了',
-        delta: 3,
+        delta: 2,
         reaction: '那必须庆祝。我宣布它进入我们的隐藏成就墙。',
       },
       {
         id: 'rested',
         label: '累的时候允许自己休息',
-        delta: 3,
+        delta: 2,
         reaction: '这也是勇气。你没有把自己当成无限续航的机器。',
       },
     ],
@@ -533,6 +534,8 @@ export function applyDialogueChoice(
   choice: DialogueChoice,
   now: Date,
 ): { state: RelationshipState; newUnlocks: string[] } {
+  if (state.answeredPromptIds.includes(prompt.id))
+    return { state, newUnlocks: [] };
   const bond = clampBond(state.bond + choice.delta);
   const level = getBondLevel(bond);
   const unlocked = [...new Set([...state.unlocked, ...unlocksForBond(bond)])];
@@ -580,11 +583,9 @@ export function bondProgressLabel(state: RelationshipState): string {
 }
 
 function unlocksForBond(bond: number): string[] {
-  const unlocked: string[] = [];
-  if (bond >= 25) unlocked.push('昵称「小搭子」', '新回应「轻轻敲门」');
-  if (bond >= 50) unlocked.push('庆祝动作「像素击掌」', '隐藏问题');
-  if (bond >= 75) unlocked.push('特殊欢迎动画', '知心完成语');
-  return unlocked;
+  return rewards
+    .filter((reward) => bond >= reward.threshold)
+    .map((reward) => reward.id);
 }
 
 function clampBond(value: number): number {

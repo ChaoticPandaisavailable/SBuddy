@@ -37,7 +37,7 @@ export async function verifyShowcase(server, check, state) {
     assert.equal(data.note.summary, '');
     assert.equal(data.courseware.result, undefined);
   });
-  check('real one-minute focus unlocks growth exactly once', () => {
+  check('real one-minute focus awards one point exactly once', () => {
     const end = now.getTime() + 60000;
     const running = {
       ...data,
@@ -53,9 +53,9 @@ export async function verifyShowcase(server, check, state) {
     assert.equal(state.settleFocus(running, end - 1).focusHistory.length, 0);
     const done = state.settleFocus(running, end);
     assert.equal(done.focusHistory[0].minutes, 1);
-    assert.equal(done.buddies[0].relationship.bond, 51);
+    assert.equal(done.buddies[0].relationship.bond, 49);
     assert.ok(
-      done.buddies[0].relationship.unlocked.includes('庆祝动作「像素击掌」'),
+      !done.buddies[0].relationship.unlocked.includes('新回应「轻轻敲门」'),
     );
     assert.equal(state.settleFocus(done, end + 1000).focusHistory.length, 1);
   });

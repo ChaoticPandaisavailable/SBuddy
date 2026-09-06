@@ -2,6 +2,67 @@ import assert from 'node:assert/strict';
 export async function verifySprites(server, check, state) {
   const sprite = await server.ssrLoadModule('/lib/sprite-animation.ts');
   const states = Object.keys(sprite.SPRITE_MANIFEST.clips);
+  const layout = await server.ssrLoadModule('/lib/desk-object-layout.ts');
+  check(
+    'desk entry objects stay on either side, in bounds and separately clickable',
+    () => {
+      for (const width of [240, 320, 400, 519, 520, 800, 1200]) {
+        const points = Object.values(layout.deskObjectLayout(width));
+        for (const point of points) {
+          assert.ok(Math.abs(point.x) + 36 <= width / 2);
+          assert.ok(point.y - 24 >= 350 && point.y + 24 <= 480);
+        }
+        assert.ok(points[0].x < 0 && points[1].x < 0 && points[2].x > 0);
+        for (let i = 0; i < points.length; i++)
+          for (let j = i + 1; j < points.length; j++)
+            assert.ok(
+              Math.abs(points[i].x - points[j].x) >= 72 ||
+                Math.abs(points[i].y - points[j].y) >= 48,
+            );
+      }
+    },
+  );
+  const desk = await server.ssrLoadModule('/lib/scene-activity-props.ts');
+  check(
+    'classroom turns pages without writing poses and respects reduced motion',
+    () => {
+      const r = sprite.createSpriteRuntime();
+      r.desired = 'class';
+      let turns = 0,
+        previous = 0;
+      for (let t = 0; t < 18000; t += 20) {
+        sprite.sampleSprite(r, t);
+        const props = desk.sampleDeskActivity(r, t);
+        if (r.current !== 'class') continue;
+        assert.equal(props.laptop, 0);
+        assert.ok(![6, 7, 8, 9, 10].includes(props.frame));
+        if (props.page > 0 && previous === 0) turns++;
+        previous = props.page;
+        assert.equal(desk.sampleDeskActivity(r, t, true).page, 0);
+      }
+      assert.ok(turns >= 2);
+    },
+  );
+  check(
+    'meeting laptop follows actual action, closes on transition, and stays absent while away',
+    () => {
+      const r = sprite.createSpriteRuntime();
+      r.desired = 'meeting';
+      let opened = false,
+        closing = false;
+      for (let t = 0; t < 22000; t += 20) {
+        if (t === 5000) r.desired = 'away';
+        sprite.sampleSprite(r, t);
+        const props = desk.sampleDeskActivity(r, t);
+        if (props.laptop === 1) opened = true;
+        if (props.laptop > 0 && props.laptop < 1) closing = true;
+        if (r.current !== 'meeting') assert.equal(props.laptop, 0);
+      }
+      assert.ok(opened && closing);
+      assert.equal(r.phase, 'away');
+      assert.equal(desk.sampleDeskActivity(r, 22000).book, 0);
+    },
+  );
   check(
     'sprite manifests cover all activities with bounded positive frame durations',
     () => {

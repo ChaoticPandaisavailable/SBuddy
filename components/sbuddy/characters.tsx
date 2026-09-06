@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { summarizeImpression } from '@/lib/impression-summary';
-import { Check, Plus, Trash2, Upload } from 'lucide-react';
+import { Check, Heart, Plus, Trash2, Upload } from 'lucide-react';
 import { useStudy } from './provider';
 import { BuddyStage, Dialog, PageTitle } from './app';
 import { createBuddy, updateBuddy } from '@/lib/sbuddy-state';
@@ -128,47 +128,27 @@ export function Characters() {
         <aside className="candidate-rail">
           <div className="section-heading">
             <h2>候选角色</h2>
-            <span>{data.buddies.filter((b) => !b.legacyPreset).length} 位</span>
+            <span>{data.buddies.length} 位</span>
           </div>
-          {data.buddies
-            .filter((b) => !b.legacyPreset)
-            .map((b) => (
-              <button
-                key={b.id}
-                className={'candidate ' + (b.id === buddy.id ? 'selected' : '')}
-                onClick={() => setData((d) => ({ ...d, activeBuddyId: b.id }))}
-              >
-                <PixelCompanionCanvas
-                  state="idle"
-                  avatarStyle={b.style}
-                  appearance={b.appearance}
-                  compact
-                />
-                <span>
-                  <strong>{b.name}</strong>
-                  <small>{b.personality}</small>
-                </span>
-                {b.id === buddy.id && <Check size={17} />}
-              </button>
-            ))}
-          {data.buddies.some((b) => b.legacyPreset) && (
-            <details className="legacy-characters">
-              <summary>旧版搭子 · 已保留记录</summary>
-              {data.buddies
-                .filter((b) => b.legacyPreset)
-                .map((b) => (
-                  <button
-                    className="secondary-button"
-                    key={b.id}
-                    onClick={() =>
-                      setData((d) => ({ ...d, activeBuddyId: b.id }))
-                    }
-                  >
-                    {b.name}
-                  </button>
-                ))}
-            </details>
-          )}
+          {data.buddies.map((b) => (
+            <button
+              key={b.id}
+              className={'candidate ' + (b.id === buddy.id ? 'selected' : '')}
+              onClick={() => setData((d) => ({ ...d, activeBuddyId: b.id }))}
+            >
+              <PixelCompanionCanvas
+                state="idle"
+                avatarStyle={b.style}
+                appearance={b.appearance}
+                compact
+              />
+              <span>
+                <strong>{b.name}</strong>
+                <small>{b.personality}</small>
+              </span>
+              {b.id === buddy.id && <Check size={17} />}
+            </button>
+          ))}
           <button className="add-candidate" onClick={() => setCreating(true)}>
             <Plus size={26} />
             <span>认识一位新搭子</span>
@@ -206,27 +186,9 @@ export function Characters() {
                 <option>温柔鼓励</option>
                 <option>理性规划</option>
                 <option>活力陪伴</option>
+                <option value="未知">未知（可塑）</option>
               </select>
             </label>
-            <label>
-              基础人物
-              <select
-                value={buddy.appearance?.preset ?? 'female'}
-                disabled={!!busyId}
-                onChange={(e) =>
-                  change((b) => ({
-                    ...b,
-                    appearance: { preset: e.target.value as BodyPreset },
-                  }))
-                }
-              >
-                <option value="female">女生 · 小禾</option>
-                <option value="male">男生 · 知序</option>
-              </select>
-            </label>
-            <p className="muted">
-              支持单人照和人头照。切换基础人物会重置外观。
-            </p>
           </div>
           <div className="button-row">
             <label
@@ -270,16 +232,23 @@ export function Characters() {
               </button>
             )}
           </div>
-          <p className="muted small">照片生成需要配置图像服务。</p>
         </section>
         <aside className="impression-rail">
           <h2>对我的印象</h2>
           <div className="impression-bond">
-            <span>{buddy.relationship.bondLevel}</span>
-            <strong>
-              {buddy.relationship.bond}
-              <small> 默契</small>
-            </strong>
+            <div
+              className="bond-heart"
+              aria-label={`默契值 ${buddy.relationship.bond}`}
+            >
+              <Heart aria-hidden="true" />
+              <span
+                style={{
+                  fontSize: `${Math.max(10, 24 - Math.max(0, String(buddy.relationship.bond).length - 2) * 2)}px`,
+                }}
+              >
+                {buddy.relationship.bond}
+              </span>
+            </div>
           </div>
           <p className="impression-description" aria-live="polite">
             {summarizeImpression(buddy, data.focusHistory)}
@@ -385,10 +354,11 @@ export function Characters() {
                 <option>温柔鼓励</option>
                 <option>理性规划</option>
                 <option>活力陪伴</option>
+                <option value="未知">未知（可塑）</option>
               </select>
             </label>
             <label>
-              基础人物
+              初始外观
               <select
                 value={bodyPreset}
                 onChange={(e) => setBodyPreset(e.target.value as BodyPreset)}

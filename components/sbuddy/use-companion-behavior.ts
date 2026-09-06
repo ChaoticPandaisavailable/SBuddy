@@ -11,6 +11,7 @@ import {
 } from '@/lib/companion-behavior';
 import type { AnimationState } from '@/lib/companion-animation';
 import type { ScheduleEvent } from '@/lib/schedule-parser';
+import { selectManualActivity } from '@/lib/activity-scoring';
 
 export function useCompanionBehavior(
   buddy: Buddy,
@@ -78,6 +79,10 @@ export function useCompanionBehavior(
         behavior: {
           ...normalizeBehavior(b.behavior),
           mode,
+          manualSession:
+            normalizeBehavior(b.behavior).mode === mode
+              ? b.behavior?.manualSession
+              : undefined,
           activity:
             normalizeBehavior(b.behavior).mode === mode
               ? b.behavior?.activity
@@ -89,11 +94,9 @@ export function useCompanionBehavior(
     if (travel || paused) return;
     if (clickDesk(behavior, activity).completed && short?.action !== 'cheer')
       setPendingCheer(true);
+    const sessionId = crypto.randomUUID();
     setData((d) =>
-      updateBuddy(d, buddy.id, (b) => ({
-        ...b,
-        behavior: clickDesk(normalizeBehavior(b.behavior), activity).behavior,
-      })),
+      selectManualActivity(d, buddy.id, activity, Date.now(), sessionId),
     );
   };
   const finishShort = useCallback((action: AnimationState, token: number) => {

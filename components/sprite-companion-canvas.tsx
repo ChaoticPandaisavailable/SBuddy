@@ -4,8 +4,14 @@ import type { CompanionCanvasProps } from './pixel-companion-canvas';
 import { ANIMATION_CLIPS } from '@/lib/companion-animation';
 import { createSpriteRuntime, sampleSprite } from '@/lib/sprite-animation';
 import { loadSpriteFrames, spriteImage } from '@/lib/sprite-assets';
+import {
+  drawClassBook,
+  drawMeetingLaptop,
+  sampleDeskActivity,
+} from '@/lib/scene-activity-props';
 import { cover } from '@/lib/chibi-renderer';
 import { DESK_OBJECTS } from '@/lib/companion-behavior';
+import { deskObjectLayout } from '@/lib/desk-object-layout';
 import { cn } from '@/lib/utils';
 
 export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
@@ -48,10 +54,18 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
         ? Math.max(240, Math.round((480 * b.width) / Math.max(1, b.height)))
         : 340;
       el.style.setProperty('--scene-unit', `${b.height / 480}px`);
-      el.style.setProperty(
-        '--desk-spread',
-        `${(Math.min(92, (c.width - 76) / 2) * b.height) / 480}px`,
-      );
+      for (const [activity, point] of Object.entries(
+        deskObjectLayout(c.width),
+      )) {
+        el.style.setProperty(
+          `--desk-${activity}-x`,
+          `${(point.x * b.height) / 480}px`,
+        );
+        el.style.setProperty(
+          `--desk-${activity}-y`,
+          `${(point.y * b.height) / 480}px`,
+        );
+      }
     };
     resize();
     const observer = new ResizeObserver(resize);
@@ -99,6 +113,7 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
           const reduced =
             window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
             document.documentElement.dataset.reduceMotion === 'true';
+          const deskActivity = sampleDeskActivity(r, now, reduced);
           const pose =
             p.previewFrame !== undefined
               ? {
@@ -112,13 +127,13 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
                 ? {
                     ...sampled,
                     frame:
-                      r.current === 'study' || r.current === 'class'
+                      r.current === 'study'
                         ? 8
                         : r.current === 'tired'
                           ? 31
                           : 0,
                   }
-                : sampled;
+                : { ...sampled, frame: deskActivity.frame ?? sampled.frame };
           if (switching && r.phase === 'away') {
             room = p.room ?? 'library';
             switching = false;
@@ -214,20 +229,33 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
             ctx.fillStyle = '#eee1c2';
             ctx.fillRect(-c.width / 2, 363, c.width, 2);
             // Paper lies directly below the writing hand; books and the laptop stay clear of the face.
-            ctx.fillStyle = '#8c81694d';
-            ctx.fillRect(-38 * characterScale, 365, 77 * characterScale, 16);
-            ctx.fillStyle = '#fff7df';
-            ctx.fillRect(-38 * characterScale, 363, 76 * characterScale, 15);
-            ctx.fillStyle = '#c8c0a5';
-            for (let y = 367; y < 376; y += 3)
-              ctx.fillRect(-31 * characterScale, y, 59 * characterScale, 1);
+            if (r.current === 'study') {
+              ctx.fillStyle = '#8c81694d';
+              ctx.fillRect(-38 * characterScale, 365, 77 * characterScale, 16);
+              ctx.fillStyle = '#fff7df';
+              ctx.fillRect(-38 * characterScale, 363, 76 * characterScale, 15);
+              ctx.fillStyle = '#c8c0a5';
+              for (let y = 367; y < 376; y += 3)
+                ctx.fillRect(-31 * characterScale, y, 59 * characterScale, 1);
+            }
             ctx.save();
             ctx.beginPath();
             ctx.rect(-c.width / 2, 0, c.width, 369);
             ctx.clip();
             body();
             ctx.restore();
-            const spread = Math.min(92, (c.width - 76) / 2);
+            if (deskActivity.book > 0)
+              drawClassBook(
+                ctx,
+                characterScale,
+                deskActivity.page,
+                deskActivity.book,
+                preset,
+              );
+            if (deskActivity.laptop > 0)
+              drawMeetingLaptop(ctx, characterScale, deskActivity.laptop);
+            const objects = deskObjectLayout(c.width);
+            const spread = 0;
             const rect = (
               x: number,
               y: number,
@@ -238,6 +266,8 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
               ctx.fillStyle = color;
               ctx.fillRect(Math.round(x), y, w, h);
             };
+            ctx.save();
+            ctx.translate(objects.study.x, objects.study.y - 379);
             rect(-spread - 30, 367, 60, 29, '#4c5b52');
             rect(-spread - 26, 371, 52, 19, '#cfdbc6');
             ctx.fillStyle = '#405441';
@@ -252,10 +282,16 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
               -spread,
               386,
             );
+            ctx.restore();
+            ctx.save();
+            ctx.translate(objects.class.x, objects.class.y - 379);
             rect(-29, 384, 58, 7, '#536e60');
             rect(-25, 379, 54, 6, '#b48d6c');
             rect(-23, 380, 48, 3, '#f0dfbd');
             rect(-18, 375, 48, 4, '#758979');
+            ctx.restore();
+            ctx.save();
+            ctx.translate(objects.meeting.x, objects.meeting.y - 377);
             rect(spread - 29, 359, 58, 32, '#424e51');
             rect(spread - 25, 363, 50, 23, '#c3d6ce');
             rect(
@@ -269,6 +305,7 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
             rect(spread - 3, 375, 17, 2, '#819d91');
             rect(spread - 34, 391, 68, 6, '#7b8986');
             rect(spread - 23, 392, 47, 2, '#c6d0c5');
+            ctx.restore();
           }
           ctx.restore();
         };
@@ -334,8 +371,8 @@ export function SpriteCompanionCanvas(props: CompanionCanvasProps) {
             disabled={!ready || travel}
             onClick={() => props.onActivityClick?.(o.activity)}
             style={{
-              left: `calc(50% + ${Math.sign(o.x)} * var(--desk-spread))`,
-              top: `${o.y / 4.8}%`,
+              left: `calc(50% + var(--desk-${o.activity}-x))`,
+              top: `var(--desk-${o.activity}-y)`,
               width: `calc(${o.w} * var(--scene-unit))`,
               height: `calc(${o.h} * var(--scene-unit))`,
             }}

@@ -3,18 +3,21 @@ import type { ScheduleEvent } from './schedule-parser';
 import type { AppData } from './sbuddy-state';
 import { eventsForDays } from './calendar-layout';
 import { campusScheduleEvents } from './campus-data';
+import { eventRewardKey, type ManualSession } from './bond-scoring';
 
 export type DeskActivity = 'study' | 'class' | 'meeting';
 export type BuddyBehavior = {
   mode: 'schedule' | 'manual';
   activity?: DeskActivity;
   lastInteractionAt?: number;
+  manualSession?: ManualSession;
 };
 export const GREETING_GAP_MS = 60 * 60 * 1000;
 export function normalizeBehavior(
   value?: Partial<BuddyBehavior>,
 ): BuddyBehavior {
   return {
+    ...(value?.manualSession ? { manualSession: value.manualSession } : {}),
     mode: value?.mode === 'manual' ? 'manual' : 'schedule',
     activity: ['study', 'class', 'meeting'].includes(value?.activity ?? '')
       ? value?.activity
@@ -87,7 +90,7 @@ export function resolveBehavior(input: {
   return target === 'idle' && input.tired ? 'tired' : target;
 }
 
-export type Completion = { id: string; buddyId?: string };
+export type Completion = { id: string; buddyId?: string; rewardKey?: string };
 export type CompletionSnapshot = {
   at: number;
   todos: Map<string, string | undefined>;
@@ -141,8 +144,14 @@ export function detectCompletions(
     )
       result.push({ id: `todo:${key}` });
   for (const [key, end] of before.events)
-    if (after.events.has(key) && before.at < end && end <= after.at)
-      result.push({ id: `event:${key}` });
+    if (after.events.has(key) && before.at < end && end <= after.at) {
+      const event = JSON.parse(key) as ScheduleEvent;
+      const rewardKey = eventRewardKey(event);
+      result.push({
+        id: rewardKey,
+        ...(event.source !== 'campus-exam' ? { rewardKey } : {}),
+      });
+    }
   const focus = before.focus;
   if (
     focus &&

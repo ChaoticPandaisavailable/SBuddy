@@ -1,14 +1,7 @@
 'use client';
 import { useState } from 'react';
-import {
-  ArrowRight,
-  CalendarSearch,
-  Check,
-  Trash2,
-  Upload,
-} from 'lucide-react';
+import { ArrowLeft, CalendarSearch, Check, Trash2, Upload } from 'lucide-react';
 import { useStudy } from './provider';
-import { PageTitle } from './app';
 import { EventForm } from './daily';
 import { CampusSyncPanel } from '@/components/campus-calendar-workspace';
 import { localDate, mergeEvents, validEvent } from '@/lib/sbuddy-state';
@@ -64,7 +57,13 @@ export function ScheduleTool({ onCalendar }: { onCalendar: () => void }) {
   };
   return (
     <>
-      <PageTitle title="日程识别" />
+      <header className="schedule-import-header">
+        <button className="secondary-button" onClick={onCalendar}>
+          <ArrowLeft size={19} />
+          返回日常活动
+        </button>
+        <h1>日程识别</h1>
+      </header>
       <div className="section-tabs">
         <button
           className={tab === 'text' ? 'active' : ''}
@@ -133,9 +132,6 @@ export function ScheduleTool({ onCalendar }: { onCalendar: () => void }) {
               />
             </label>
           </div>
-          <p className="muted small">
-            识别不会直接修改日历。不确定的信息留给你确认。
-          </p>
         </section>
         <section className="paper-panel">
           <div className="section-heading">
@@ -206,10 +202,6 @@ export function ScheduleTool({ onCalendar }: { onCalendar: () => void }) {
           data={data.campus}
           onChange={(campus) => setData((d) => ({ ...d, campus }))}
         />
-        <button className="secondary-button" onClick={onCalendar}>
-          查看日历
-          <ArrowRight size={16} />
-        </button>
       </div>
     </>
   );
